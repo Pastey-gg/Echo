@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"strings"
+	"time"
 )
 
 const (
@@ -37,14 +38,15 @@ func New(module, colour string) *Logger {
 	return &Logger{
 		module: module,
 		colour: colour,
-		l:      log.New(os.Stdout, "", log.Ldate|log.Ltime),
+		l:      log.New(os.Stdout, "", 0),
 	}
 }
 
 func (l *Logger) prefix(level, levelColour string) string {
+	ts := time.Now().Format("2006-01-02 15:04:05")
 	mod := fmt.Sprintf("%s%s[%s]%s", bold, l.colour, l.module, reset)
 	lvl := fmt.Sprintf("%s%s[%s]%s", bold, levelColour, level, reset)
-	return mod + " " + lvl
+	return ts + " " + mod + " " + lvl
 }
 
 func (l *Logger) Info(v ...any) {
@@ -97,7 +99,7 @@ func NewHandler(module, colour string) *Handler {
 	return &Handler{
 		module: module,
 		colour: colour,
-		l:      log.New(os.Stdout, "", log.Ldate|log.Ltime),
+		l:      log.New(os.Stdout, "", 0),
 	}
 }
 
@@ -113,22 +115,34 @@ func (h *Handler) Handle(_ context.Context, r slog.Record) error {
 	case slog.LevelError:
 		levelColour = red
 	}
+	t := r.Time
+	if t.IsZero() {
+		t = time.Now()
+	}
+
+	ts := t.UTC().Format(time.RFC3339)
 
 	mod := fmt.Sprintf("%s%s[%s]%s", bold, h.colour, h.module, reset)
 	lvl := fmt.Sprintf("%s%s[%s]%s", bold, levelColour, r.Level.String(), reset)
 
-	var parts []string
+	var b strings.Builder
+	b.WriteString(ts)
+	b.WriteByte(' ')
+	b.WriteString(mod)
+	b.WriteByte(' ')
+	b.WriteString(lvl)
+	b.WriteByte(' ')
+	b.WriteString(r.Message)
+
 	r.Attrs(func(a slog.Attr) bool {
-		parts = append(parts, fmt.Sprintf("%s=%v", a.Key, a.Value))
+		b.WriteByte(' ')
+		b.WriteString(a.Key)
+		b.WriteByte('=')
+		b.WriteString(a.Value.String())
 		return true
 	})
 
-	msg := r.Message
-	if len(parts) > 0 {
-		msg += " " + strings.Join(parts, " ")
-	}
-
-	h.l.Print(mod + " " + lvl + " " + msg)
+	h.l.Print(b.String())
 	return nil
 }
 
