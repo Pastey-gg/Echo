@@ -5,3 +5,7 @@ general:
 
 database:
   dsn: "postgres://user:password@localhost:5432/echo?sslmode=disable"
+
+pastes:
+  max_files: 5
+  max_file_size: 350000

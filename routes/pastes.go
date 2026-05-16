@@ -12,11 +12,6 @@ import (
 	"github.com/labstack/echo/v5"
 )
 
-const (
-	maxFiles    = 5
-	maxFileSize = 300_000
-)
-
 type PasteView struct {
 	ctx *state.Context
 }
@@ -35,18 +30,20 @@ func (v *PasteView) createPaste(c *echo.Context) error {
 		if err := c.Bind(&data); err != nil {
 			return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid JSON."})
 		}
+
 	} else {
 		body, err := io.ReadAll(c.Request().Body)
 		if err != nil {
 			return c.JSON(http.StatusBadRequest, map[string]string{"error": "Failed to read body."})
 		}
+
 		content := strings.TrimSpace(string(body))
 		data = models.CreatePaste{
 			Files: []models.CreateFile{{Content: content}},
 		}
 	}
 
-	if err := validatePaste(data); err != nil {
+	if err := validatePaste(v.ctx, data); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
 
@@ -76,6 +73,7 @@ func (v *PasteView) getPaste(c *echo.Context) error {
 		case errors.Is(err, models.ErrUnauthorized):
 			return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Invalid or missing password."})
 		}
+
 		v.ctx.Logger.Errorf("Failed to fetch paste %s: %v", id, err)
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Internal server error."})
 	}
@@ -83,20 +81,27 @@ func (v *PasteView) getPaste(c *echo.Context) error {
 	return c.JSON(http.StatusOK, paste)
 }
 
-func validatePaste(p models.CreatePaste) error {
+func validatePaste(ctx *state.Context, p models.CreatePaste) error {
+	maxFiles := ctx.Config.Pastes.MaxFiles
+	maxFileSize := ctx.Config.Pastes.MaxFileSize
+
 	if len(p.Files) == 0 {
-		return errors.New("at least one file is required")
+		return errors.New("At least one valid file must be provided.")
 	}
+
 	if len(p.Files) > maxFiles {
-		return fmt.Errorf("maximum %d files per paste", maxFiles)
+		return fmt.Errorf("Maximum of %d files per paste allowed.", maxFiles)
 	}
+
 	for _, f := range p.Files {
 		if f.Content == "" {
-			return errors.New("file content must not be empty")
+			return errors.New("File content cannot be empty.")
 		}
+
 		if len([]rune(f.Content)) > maxFileSize {
-			return fmt.Errorf("file content exceeds maximum of %d characters", maxFileSize)
+			return fmt.Errorf("File content exceeds maximum of %d characters.", maxFileSize)
 		}
 	}
+
 	return nil
 }
