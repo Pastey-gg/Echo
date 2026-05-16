@@ -1,7 +1,7 @@
 package models
 
 type CreateFile struct {
-	Name     *string  `json:"name"`
+	Name     *string `json:"name"`
 	Language *string `json:"language"`
 	Content  string  `json:"content"`
 }
