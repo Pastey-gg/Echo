@@ -14,6 +14,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+//go:embed schema.sql
 var schema string
 
 type Postgres struct {
