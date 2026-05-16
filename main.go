@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+
 	"github.com/EvieePy/Echo/routes"
 	"github.com/EvieePy/Echo/state"
 )
@@ -11,8 +13,12 @@ func main() {
 	// Load Routes...
 	routes.LoadRoutes(ctx)
 
-	// Default start server stuff...
-	if err := ctx.Server.Start(":1323"); err != nil {
-		ctx.Server.Logger.Error("failed to start server", "error", err)
+	// Start Server...
+	conf := ctx.Config
+	host := conf.General.Host
+	port := conf.General.Port
+
+	if err := ctx.Server.Start(fmt.Sprintf("%v:%v", host, port)); err != nil {
+		ctx.Server.Logger.Error("Unable to start Echo Backend...", "error", err)
 	}
 }
