@@ -20,14 +20,39 @@ type Context struct {
 	Database      database.Database
 }
 
-func NewContext() *Context {
-	server := echo.New()
+func loadConfig(appLogger *logger.Logger) models.Config {
+	data, err := os.ReadFile("config.yaml")
+	if err != nil {
+		appLogger.Fatalf("unable to read 'config.yaml': %v", err)
+	}
 
-	appLogger := logger.New("APP", logger.ColourApp)
-	reqLogger := logger.New("REQUEST", logger.ColourRequest)
+	var config models.Config
+	if err = yaml.Unmarshal(data, &config); err != nil {
+		appLogger.Fatalf("unable to parse 'config.yaml': %v", err)
+	}
 
-	server.Logger = slog.New(logger.NewHandler("SERVER", logger.ColourServer))
+	return config
+}
 
+func loadDatabase(config *models.Config, appLogger *logger.Logger) database.Database {
+	var db database.Database
+
+	if config.Database.DSN != "" {
+		pg, err := database.NewPostgres(config.Database.DSN)
+		if err != nil {
+			appLogger.Fatalf("unable to connect to database: %v", err)
+		}
+		db = pg
+		appLogger.Infof("connected to postgres")
+	} else {
+		db = database.NewMemory()
+		appLogger.Infof("using in-memory database")
+	}
+
+	return db
+}
+
+func loadMiddleware(server *echo.Echo, reqLogger *logger.Logger) {
 	server.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
 		LogStatus:  true,
 		LogMethod:  true,
@@ -42,29 +67,18 @@ func NewContext() *Context {
 			return nil
 		},
 	}))
+}
 
-	data, err := os.ReadFile("config.yaml")
-	if err != nil {
-		appLogger.Fatalf("unable to read 'config.yaml': %v", err)
-	}
+func NewContext() *Context {
+	server := echo.New()
 
-	var config models.Config
-	if err = yaml.Unmarshal(data, &config); err != nil {
-		appLogger.Fatalf("unable to parse 'config.yaml': %v", err)
-	}
+	appLogger := logger.New("APP", logger.ColourApp)
+	reqLogger := logger.New("REQUEST", logger.ColourRequest)
+	server.Logger = slog.New(logger.NewHandler("SERVER", logger.ColourServer))
 
-	var db database.Database
-	if config.Database.DSN != "" {
-		pg, err := database.NewPostgres(config.Database.DSN)
-		if err != nil {
-			appLogger.Fatalf("unable to connect to database: %v", err)
-		}
-		db = pg
-		appLogger.Infof("connected to postgres")
-	} else {
-		db = database.NewMemory()
-		appLogger.Infof("using in-memory database")
-	}
+	config := loadConfig(appLogger)
+	db := loadDatabase(&config, appLogger)
+	loadMiddleware(server, reqLogger)
 
 	return &Context{Server: server, Config: &config, Logger: appLogger, RequestLogger: reqLogger, Database: db}
 }
