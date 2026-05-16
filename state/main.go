@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"os"
 
+	"github.com/EvieePy/Echo/database"
 	"github.com/EvieePy/Echo/logger"
 	"github.com/EvieePy/Echo/models"
 	"github.com/labstack/echo/v5"
@@ -16,6 +17,7 @@ type Context struct {
 	Config        *models.Config
 	Logger        *logger.Logger
 	RequestLogger *logger.Logger
+	Database      database.Database
 }
 
 func NewContext() *Context {
@@ -51,5 +53,18 @@ func NewContext() *Context {
 		appLogger.Fatalf("unable to parse 'config.yaml': %v", err)
 	}
 
-	return &Context{Server: server, Config: &config, Logger: appLogger, RequestLogger: reqLogger}
+	var db database.Database
+	if config.Database.DSN != "" {
+		pg, err := database.NewPostgres(config.Database.DSN)
+		if err != nil {
+			appLogger.Fatalf("unable to connect to database: %v", err)
+		}
+		db = pg
+		appLogger.Infof("connected to postgres")
+	} else {
+		db = database.NewMemory()
+		appLogger.Infof("using in-memory database")
+	}
+
+	return &Context{Server: server, Config: &config, Logger: appLogger, RequestLogger: reqLogger, Database: db}
 }

@@ -2,3 +2,6 @@ general:
   host: "0.0.0.0"
   port: 8080
   use_gzip: true
+
+database:
+  dsn: "postgres://user:password@localhost:5432/echo?sslmode=disable"

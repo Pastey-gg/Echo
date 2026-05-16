@@ -8,7 +8,9 @@ type RouteViewI interface {
 
 func LoadRoutes(ctx *state.Context) {
 	views := []RouteViewI{
-		&TestView{ctx},
+		&MetaView{ctx},
+		&PasteView{ctx},
+		&SecurityView{ctx},
 	}
 
 	for _, v := range views {
