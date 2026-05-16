@@ -12,13 +12,9 @@ type TestView struct {
 }
 
 func (v *TestView) LoadRoutes() {
-	v.test("/test")
+	v.ctx.Server.GET("/test", v.test)
 }
 
-func (v *TestView) test(path string) {
-	route := func(c *echo.Context) error {
-		return c.String(http.StatusOK, "Hello, World!")
-	}
-
-	v.ctx.Server.GET(path, route)
+func (v *TestView) test(c *echo.Context) error {
+	return c.String(http.StatusOK, "Hello, World!")
 }

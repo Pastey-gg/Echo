@@ -7,6 +7,11 @@ type RouteViewI interface {
 }
 
 func LoadRoutes(ctx *state.Context) {
-	testView := TestView{ctx}
-	testView.LoadRoutes()
+	views := []RouteViewI{
+		&TestView{ctx},
+	}
+
+	for _, v := range views {
+		v.LoadRoutes()
+	}
 }

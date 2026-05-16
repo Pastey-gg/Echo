@@ -19,6 +19,6 @@ func main() {
 	port := conf.General.Port
 
 	if err := ctx.Server.Start(fmt.Sprintf("%v:%v", host, port)); err != nil {
-		ctx.Server.Logger.Error("Unable to start Echo Backend...", "error", err)
+		ctx.Logger.Errorf("Unable to start Echo Backend: %v", err)
 	}
 }
