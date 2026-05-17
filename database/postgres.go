@@ -18,21 +18,27 @@ import (
 var schema string
 
 type Postgres struct {
-	pool *pgxpool.Pool
+	pool   *pgxpool.Pool
+	config *models.Config
 }
 
-func NewPostgres(dsn string) (*Postgres, error) {
+func NewPostgres(config *models.Config) (*Postgres, error) {
+	dsn := config.Database.DSN
+
 	pool, err := pgxpool.New(context.Background(), dsn)
 	if err != nil {
 		return nil, err
 	}
+
 	if err := pool.Ping(context.Background()); err != nil {
 		return nil, err
 	}
+
 	if _, err := pool.Exec(context.Background(), schema); err != nil {
 		return nil, err
 	}
-	return &Postgres{pool: pool}, nil
+
+	return &Postgres{pool: pool, config: config}, nil
 }
 
 func (p *Postgres) Ping() error {
@@ -46,6 +52,7 @@ func (p *Postgres) CreatePaste(cp models.CreatePaste) (models.CreatePasteRespons
 	if cp.Password != nil && *cp.Password != "" {
 		var err error
 		hashedPw, err = bcrypt.GenerateFromPassword([]byte(*cp.Password), bcrypt.DefaultCost)
+
 		if err != nil {
 			return models.CreatePasteResponse{}, err
 		}
@@ -53,10 +60,12 @@ func (p *Postgres) CreatePaste(cp models.CreatePaste) (models.CreatePasteRespons
 
 	files := make([]models.File, len(cp.Files))
 	for i, f := range cp.Files {
-		fileID, err := generateID(pasteIDLength)
+
+		fileID, err := generateID(p.config.Pastes.IdLen)
 		if err != nil {
 			return models.CreatePasteResponse{}, err
 		}
+
 		files[i] = models.File{
 			Id:             fileID,
 			CharacterCount: len([]rune(f.Content)),
@@ -70,11 +79,12 @@ func (p *Postgres) CreatePaste(cp models.CreatePaste) (models.CreatePasteRespons
 
 	for {
 		var err error
-		id, err = generateID(pasteIDLength)
+		id, err = generateID(p.config.Pastes.IdLen)
 		if err != nil {
 			return models.CreatePasteResponse{}, err
 		}
-		token, err = generateID(tokenLength)
+
+		token, err = generateID(p.config.Pastes.TokenLen)
 		if err != nil {
 			return models.CreatePasteResponse{}, err
 		}
@@ -96,12 +106,15 @@ func (p *Postgres) CreatePaste(cp models.CreatePaste) (models.CreatePasteRespons
 			 RETURNING created_at`,
 			id, cp.ExpiresAt, cp.RemainingViews, hashedPwStr, token,
 		).Scan(&createdAt)
+
 		if err != nil {
 			tx.Rollback(ctx)
 			var pgErr *pgconn.PgError
+
 			if errors.As(err, &pgErr) && pgErr.Code == "23505" {
 				continue // duplicate id or token, retry
 			}
+
 			return models.CreatePasteResponse{}, err
 		}
 
@@ -141,13 +154,16 @@ func (p *Postgres) FetchPaste(id string, password *string) (models.PasteResponse
 
 	var hashedPw *string
 	var paste models.Paste
+
 	err := p.pool.QueryRow(ctx,
 		`SELECT id, created_at, views, expires_at, remaining_views, hashed_password
 		 FROM pastes WHERE id = $1`, id,
 	).Scan(&paste.Id, &paste.CreatedAt, &paste.Views, &paste.ExpiresAt, &paste.RemainingViews, &hashedPw)
+
 	if errors.Is(err, pgx.ErrNoRows) {
 		return models.PasteResponse{}, models.ErrNotFound
 	}
+
 	if err != nil {
 		return models.PasteResponse{}, err
 	}
@@ -156,6 +172,7 @@ func (p *Postgres) FetchPaste(id string, password *string) (models.PasteResponse
 		p.pool.Exec(ctx, `DELETE FROM pastes WHERE id = $1`, id)
 		return models.PasteResponse{}, models.ErrNotFound
 	}
+
 	if paste.RemainingViews != nil && *paste.RemainingViews <= 0 {
 		p.pool.Exec(ctx, `DELETE FROM pastes WHERE id = $1`, id)
 		return models.PasteResponse{}, models.ErrNotFound
@@ -165,6 +182,7 @@ func (p *Postgres) FetchPaste(id string, password *string) (models.PasteResponse
 		if password == nil || *password == "" {
 			return models.PasteResponse{}, models.ErrUnauthorized
 		}
+
 		if err := bcrypt.CompareHashAndPassword([]byte(*hashedPw), []byte(*password)); err != nil {
 			return models.PasteResponse{}, models.ErrUnauthorized
 		}
@@ -172,6 +190,7 @@ func (p *Postgres) FetchPaste(id string, password *string) (models.PasteResponse
 
 	var newViews int
 	var newRemaining *int
+
 	err = p.pool.QueryRow(ctx,
 		`UPDATE pastes
 		 SET views = views + 1,
@@ -179,6 +198,7 @@ func (p *Postgres) FetchPaste(id string, password *string) (models.PasteResponse
 		 WHERE id = $1
 		 RETURNING views, remaining_views`, id,
 	).Scan(&newViews, &newRemaining)
+
 	if err != nil {
 		return models.PasteResponse{}, err
 	}
@@ -187,9 +207,11 @@ func (p *Postgres) FetchPaste(id string, password *string) (models.PasteResponse
 		`SELECT id, name, language, content, character_count, line_count
 		 FROM files WHERE paste_id = $1`, id,
 	)
+
 	if err != nil {
 		return models.PasteResponse{}, err
 	}
+
 	defer rows.Close()
 
 	var files []models.File
@@ -198,6 +220,7 @@ func (p *Postgres) FetchPaste(id string, password *string) (models.PasteResponse
 		if err := rows.Scan(&f.Id, &f.Name, &f.Language, &f.Content, &f.CharacterCount, &f.LineCount); err != nil {
 			return models.PasteResponse{}, err
 		}
+
 		files = append(files, f)
 	}
 
@@ -214,15 +237,19 @@ func (p *Postgres) FetchPaste(id string, password *string) (models.PasteResponse
 
 func (p *Postgres) FetchSecurity(token string) (models.Security, error) {
 	var id string
+
 	err := p.pool.QueryRow(context.Background(),
 		`SELECT id FROM pastes WHERE safety_token = $1`, token,
 	).Scan(&id)
+
 	if errors.Is(err, pgx.ErrNoRows) {
 		return models.Security{}, models.ErrNotFound
 	}
+
 	if err != nil {
 		return models.Security{}, err
 	}
+
 	return models.Security{PasteID: id, SafetyToken: token}, nil
 }
 
@@ -230,11 +257,14 @@ func (p *Postgres) DeletePaste(token string) error {
 	tag, err := p.pool.Exec(context.Background(),
 		`DELETE FROM pastes WHERE safety_token = $1`, token,
 	)
+
 	if err != nil {
 		return err
 	}
+
 	if tag.RowsAffected() == 0 {
 		return models.ErrNotFound
 	}
+
 	return nil
 }

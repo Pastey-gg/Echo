@@ -7,11 +7,7 @@ import (
 	"github.com/EvieePy/Echo/models"
 )
 
-const (
-	pasteIDLength = 7
-	tokenLength   = 32
-	idChars       = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-)
+const idChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
 type Database interface {
 	CreatePaste(p models.CreatePaste) (models.CreatePasteResponse, error)
@@ -23,12 +19,15 @@ type Database interface {
 
 func generateID(length int) (string, error) {
 	result := make([]byte, length)
+
 	for i := range result {
 		n, err := rand.Int(rand.Reader, big.NewInt(int64(len(idChars))))
 		if err != nil {
 			return "", err
 		}
+
 		result[i] = idChars[n.Int64()]
 	}
+
 	return string(result), nil
 }

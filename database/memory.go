@@ -19,24 +19,26 @@ type Memory struct {
 	mu     sync.RWMutex
 	pastes map[string]*storedPaste // id -> storedPaste
 	tokens map[string]string       // safetyToken -> paste id
+	config *models.Config
 }
 
-func NewMemory() *Memory {
+func NewMemory(config *models.Config) *Memory {
 	return &Memory{
 		pastes: make(map[string]*storedPaste),
 		tokens: make(map[string]string),
+		config: config,
 	}
 }
 
 func (m *Memory) Ping() error { return nil }
 
 func (m *Memory) CreatePaste(p models.CreatePaste) (models.CreatePasteResponse, error) {
-	id, err := generateID(pasteIDLength)
+	id, err := generateID(m.config.Pastes.IdLen)
 	if err != nil {
 		return models.CreatePasteResponse{}, err
 	}
 
-	token, err := generateID(tokenLength)
+	token, err := generateID(m.config.Pastes.TokenLen)
 	if err != nil {
 		return models.CreatePasteResponse{}, err
 	}
@@ -51,10 +53,11 @@ func (m *Memory) CreatePaste(p models.CreatePaste) (models.CreatePasteResponse, 
 
 	files := make([]models.File, len(p.Files))
 	for i, f := range p.Files {
-		fileID, err := generateID(pasteIDLength)
+		fileID, err := generateID(m.config.Pastes.IdLen)
 		if err != nil {
 			return models.CreatePasteResponse{}, err
 		}
+
 		files[i] = models.File{
 			Id:             fileID,
 			CharacterCount: len([]rune(f.Content)),
@@ -114,6 +117,7 @@ func (m *Memory) FetchPaste(id string, password *string) (models.PasteResponse, 
 		if password == nil || *password == "" {
 			return models.PasteResponse{}, models.ErrUnauthorized
 		}
+
 		if err := bcrypt.CompareHashAndPassword(sp.hashedPassword, []byte(*password)); err != nil {
 			return models.PasteResponse{}, models.ErrUnauthorized
 		}

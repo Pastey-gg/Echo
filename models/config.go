@@ -14,5 +14,7 @@ type Config struct {
 	Pastes struct {
 		MaxFiles    int `yaml:"max_files"`
 		MaxFileSize int `yaml:"max_file_size"`
+		IdLen       int `yaml:"id_length"`
+		TokenLen    int `yaml:"token_length"`
 	} `yaml:"pastes"`
 }
