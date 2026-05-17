@@ -1,3 +1,4 @@
+//go:generate swag init
 package main
 
 import (
@@ -7,6 +8,9 @@ import (
 	"github.com/EvieePy/Echo/state"
 )
 
+// @title Pastey.gg API Documentation
+// @license.name AGPL-3.0-or-later
+// @license.url https://www.gnu.org/licenses/#AGPL
 func main() {
 	ctx := state.NewContext()
 

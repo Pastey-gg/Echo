@@ -11,6 +11,7 @@ func LoadRoutes(ctx *state.Context) {
 		&MetaView{ctx},
 		&PasteView{ctx},
 		&SecurityView{ctx},
+		&DocsView{ctx},
 	}
 
 	for _, v := range views {

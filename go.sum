@@ -1,3 +1,5 @@
+github.com/bdpiprava/scalar-go v0.13.0 h1:TuhOwYalDpLAziohyEwZlq4PqtEJ+6P/V92dDCdja9k=
+github.com/bdpiprava/scalar-go v0.13.0/go.mod h1:e5Nn4yIhcYjlucu4ACMqcs410nIAe5whqj78H3Qv7vw=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/jackc/pgpassfile v1.0.0 h1:/6Hmqy13Ss2zCq62VdNG8tM1wchn8zjSGOBJ6icpsIM=
 github.com/jackc/pgpassfile v1.0.0/go.mod h1:CEx0iS5ambNFdcRtxPj5JhEz+xB6uRky5eyVu/W2HEg=
