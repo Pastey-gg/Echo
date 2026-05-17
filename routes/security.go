@@ -27,6 +27,7 @@ func (v *SecurityView) getSecurity(c *echo.Context) error {
 		if errors.Is(err, models.ErrNotFound) {
 			return c.JSON(http.StatusNotFound, map[string]string{"error": "Token not found or paste has been deleted."})
 		}
+
 		v.ctx.Logger.Errorf("Failed to fetch security for token %s: %v", token, err)
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Internal server error."})
 	}
@@ -47,6 +48,7 @@ func (v *SecurityView) deletePaste(c *echo.Context) error {
 		if errors.Is(err, models.ErrNotFound) {
 			return c.JSON(http.StatusNotFound, map[string]string{"error": "Token not found or paste has already been deleted."})
 		}
+
 		v.ctx.Logger.Errorf("Failed to delete paste for token %s: %v", token, err)
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Internal server error."})
 	}
