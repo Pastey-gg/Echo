@@ -4,7 +4,15 @@ general:
   use_gzip: true
 
 database:
-  dsn: "postgres://user:password@localhost:5432/echo?sslmode=disable"
+  # Docker (make up): use "db" as the host — it resolves inside the Docker network.
+  dsn: "postgres://echo:echo@db:5432/echo?sslmode=disable"
+  
+  # Local requires the superuser
+  # `go run .` / `go build` and run `./Echo`
+  # dsn: "postgres://postgres:postgres@localhost:5432/echo?sslmode=disable"
+
+  # In Memory mode (No DB and loses all pastes on restart)
+  # dsn: ""
 
 pastes:
   max_files: 5

@@ -4,6 +4,7 @@ import (
 	"context"
 	_ "embed"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -14,8 +15,14 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+//go:embed init.sql
+var initSQL string
+
 //go:embed schema.sql
 var schema string
+
+// pgErrInvalidCatalogName is the SQLSTATE returned when the target database does not exist.
+const pgErrInvalidCatalogName = "3D000"
 
 type Postgres struct {
 	pool   *pgxpool.Pool
@@ -23,22 +30,133 @@ type Postgres struct {
 }
 
 func NewPostgres(config *models.Config) (*Postgres, error) {
-	dsn := config.Database.DSN
+	ctx := context.Background()
 
-	pool, err := pgxpool.New(context.Background(), dsn)
+	pool, err := newPoolWithBootstrap(ctx, config.Database.DSN)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := pool.Ping(context.Background()); err != nil {
-		return nil, err
-	}
-
-	if _, err := pool.Exec(context.Background(), schema); err != nil {
+	if _, err := pool.Exec(ctx, schema); err != nil {
+		pool.Close()
 		return nil, err
 	}
 
 	return &Postgres{pool: pool, config: config}, nil
+}
+
+// newPoolWithBootstrap connects to the target database, creating it first if it
+// does not yet exist, then applies init.sql when the connected role is a superuser.
+func newPoolWithBootstrap(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
+	conf, err := pgxpool.ParseConfig(dsn)
+	if err != nil {
+		return nil, err
+	}
+
+	pool, err := pgxpool.NewWithConfig(ctx, conf)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := pool.Ping(ctx); err != nil {
+		var pgErr *pgconn.PgError
+		if !errors.As(err, &pgErr) || pgErr.Code != pgErrInvalidCatalogName {
+			pool.Close()
+			return nil, err
+		}
+
+		// Database does not exist — create it then reconnect.
+		pool.Close()
+		if err := createDatabase(ctx, conf); err != nil {
+			return nil, err
+		}
+
+		pool, err = pgxpool.NewWithConfig(ctx, conf)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := pool.Ping(ctx); err != nil {
+			pool.Close()
+			return nil, err
+		}
+	}
+
+	if err := applyInitSQL(ctx, pool); err != nil {
+		pool.Close()
+		return nil, err
+	}
+
+	return pool, nil
+}
+
+// createDatabase connects to the postgres maintenance database and creates the
+// target database specified in conf. Returns an error with a message if
+// the connecting role is not a superuser (e.g. in Docker where POSTGRES_DB
+// should have already created the database via the entrypoint).
+func createDatabase(ctx context.Context, conf *pgxpool.Config) error {
+	targetDB := conf.ConnConfig.Database
+	if targetDB == "" {
+		return errors.New("database name missing in DSN")
+	}
+
+	adminConf := conf.Copy()
+	adminConf.ConnConfig.Database = "postgres"
+
+	adminPool, err := pgxpool.NewWithConfig(ctx, adminConf)
+	if err != nil {
+		// Cannot reach maintenance db — likely a non-superuser or missing role.
+		return fmt.Errorf("database %q does not exist and cannot be created automatically (could not connect to maintenance database): %w", targetDB, err)
+	}
+	defer adminPool.Close()
+
+	if err := adminPool.Ping(ctx); err != nil {
+		return fmt.Errorf("database %q does not exist and cannot be created automatically (could not connect to maintenance database): %w", targetDB, err)
+	}
+
+	var isSuperuser bool
+	if err := adminPool.QueryRow(ctx,
+		`SELECT COALESCE((SELECT rolsuper FROM pg_roles WHERE rolname = current_user), false)`,
+	).Scan(&isSuperuser); err != nil {
+		return err
+	}
+
+	if !isSuperuser {
+		return fmt.Errorf("database %q does not exist; current user is not a superuser and cannot create it — in Docker ensure POSTGRES_DB is set, or create the database manually", targetDB)
+	}
+
+	var exists bool
+	if err := adminPool.QueryRow(ctx,
+		`SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname = $1)`, targetDB,
+	).Scan(&exists); err != nil {
+		return err
+	}
+
+	if exists {
+		return nil
+	}
+
+	_, err = adminPool.Exec(ctx, fmt.Sprintf("CREATE DATABASE %s", pgx.Identifier{targetDB}.Sanitize()))
+	return err
+}
+
+// applyInitSQL runs init.sql only when the connected role is a superuser, so
+// that the echo role and grants are set up automatically on local installs.
+// In Docker the Postgres entrypoint already handles this via the mounted init script.
+func applyInitSQL(ctx context.Context, pool *pgxpool.Pool) error {
+	var isSuperuser bool
+	if err := pool.QueryRow(ctx,
+		`SELECT COALESCE((SELECT rolsuper FROM pg_roles WHERE rolname = current_user), false)`,
+	).Scan(&isSuperuser); err != nil {
+		return err
+	}
+
+	if !isSuperuser {
+		return nil
+	}
+
+	_, err := pool.Exec(ctx, initSQL)
+	return err
 }
 
 func (p *Postgres) Ping() error {

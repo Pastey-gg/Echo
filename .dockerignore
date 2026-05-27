@@ -1,0 +1,22 @@
+# Dependencies
+vendor/
+
+# Build output
+echo
+Echo
+
+# Docker files
+docker-compose.override.yml
+
+# Config with secrets — mount at runtime instead
+config.yaml
+
+# Version control
+.git/
+
+# Editor
+.vscode/
+.idea/
+
+# Logs
+*.log
