@@ -1,7 +1,10 @@
-.PHONY: up down restart setup purge
+.PHONY: up down restart purge restart-build up-build
 
 up:
 	docker compose up -d
+
+up-build:
+	docker compose up --build -d
 
 down:
 	docker compose down
@@ -9,8 +12,8 @@ down:
 restart:
 	docker compose restart
 
-setup:
-	docker compose up --build -d
+restart-build:
+	docker compose up --build -d --force-recreate
 
 purge:
 	docker compose down --volumes --remove-orphans
