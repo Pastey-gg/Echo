@@ -13,6 +13,7 @@ type Database interface {
 	CreatePaste(p models.CreatePaste) (models.CreatePasteResponse, error)
 	FetchPaste(id string, password *string) (models.PasteResponse, error)
 	FetchSecurity(token string) (models.Security, error)
+	DeleteFile(token, fileID string) error
 	DeletePaste(token string) error
 	Ping() error
 }

@@ -371,6 +371,56 @@ func (p *Postgres) FetchSecurity(token string) (models.Security, error) {
 	return models.Security{PasteID: id, SafetyToken: token}, nil
 }
 
+func (p *Postgres) DeleteFile(token, fileID string) error {
+	ctx := context.Background()
+
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	var pasteID string
+	err = tx.QueryRow(ctx,
+		`SELECT id FROM pastes WHERE safety_token = $1 FOR UPDATE`, token,
+	).Scan(&pasteID)
+
+	if errors.Is(err, pgx.ErrNoRows) {
+		return models.ErrNotFound
+	}
+
+	if err != nil {
+		return err
+	}
+
+	var fileCount int
+	err = tx.QueryRow(ctx,
+		`SELECT COUNT(*) FROM files WHERE paste_id = $1`, pasteID,
+	).Scan(&fileCount)
+
+	if err != nil {
+		return err
+	}
+
+	if fileCount <= 1 {
+		return models.ErrConflict
+	}
+
+	tag, err := tx.Exec(ctx,
+		`DELETE FROM files WHERE id = $1 AND paste_id = $2`, fileID, pasteID,
+	)
+
+	if err != nil {
+		return err
+	}
+
+	if tag.RowsAffected() == 0 {
+		return models.ErrNotFound
+	}
+
+	return tx.Commit(ctx)
+}
+
 func (p *Postgres) DeletePaste(token string) error {
 	tag, err := p.pool.Exec(context.Background(),
 		`DELETE FROM pastes WHERE safety_token = $1`, token,

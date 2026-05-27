@@ -8,6 +8,7 @@ import (
 var (
 	ErrNotFound     = errors.New("not found")
 	ErrUnauthorized = errors.New("unauthorized")
+	ErrConflict     = errors.New("conflict")
 )
 
 // CreatePaste is the request body for POST /pastes.

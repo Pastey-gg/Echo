@@ -152,6 +152,40 @@ func (m *Memory) FetchSecurity(token string) (models.Security, error) {
 	return models.Security{PasteID: id, SafetyToken: token}, nil
 }
 
+func (m *Memory) DeleteFile(token, fileID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	id, ok := m.tokens[token]
+	if !ok {
+		return models.ErrNotFound
+	}
+
+	sp, ok := m.pastes[id]
+	if !ok {
+		return models.ErrNotFound
+	}
+
+	idx := -1
+	for i, f := range sp.paste.Files {
+		if f.Id == fileID {
+			idx = i
+			break
+		}
+	}
+
+	if idx == -1 {
+		return models.ErrNotFound
+	}
+
+	if len(sp.paste.Files) <= 1 {
+		return models.ErrConflict
+	}
+
+	sp.paste.Files = append(sp.paste.Files[:idx], sp.paste.Files[idx+1:]...)
+	return nil
+}
+
 func (m *Memory) DeletePaste(token string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
