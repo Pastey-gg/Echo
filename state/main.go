@@ -2,6 +2,7 @@ package state
 
 import (
 	"log/slog"
+	"net/http"
 	"os"
 
 	"github.com/EvieePy/Echo/database"
@@ -53,7 +54,7 @@ func loadDatabase(config *models.Config, appLogger *logger.Logger) database.Data
 	return db
 }
 
-func loadMiddleware(server *echo.Echo, reqLogger *logger.Logger) {
+func loadMiddleware(server *echo.Echo, config *models.Config, reqLogger *logger.Logger) {
 	server.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
 		LogStatus:  true,
 		LogMethod:  true,
@@ -68,6 +69,12 @@ func loadMiddleware(server *echo.Echo, reqLogger *logger.Logger) {
 			return nil
 		},
 	}))
+
+	server.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+		AllowMethods: []string{http.MethodOptions, http.MethodGet, http.MethodPost, http.MethodDelete},
+		AllowOrigins: config.General.AllowedOrigins,
+		AllowHeaders: []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAccept, echo.HeaderAuthorization},
+	}))
 }
 
 func NewContext() *Context {
@@ -79,7 +86,7 @@ func NewContext() *Context {
 
 	config := loadConfig(appLogger)
 	db := loadDatabase(&config, appLogger)
-	loadMiddleware(server, reqLogger)
+	loadMiddleware(server, &config, reqLogger)
 	verInfo := NewVersionInfo(appLogger)
 
 	return &Context{

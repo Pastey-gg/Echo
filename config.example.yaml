@@ -2,6 +2,7 @@ general:
   host: "0.0.0.0"
   port: 8080
   use_gzip: true
+  allowed_origins: ["http://localhost:5173"]
 
 database:
   # Docker (make up): use "db" as the host — it resolves inside the Docker network.
