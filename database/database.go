@@ -12,6 +12,7 @@ const idChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 type Database interface {
 	CreatePaste(p models.CreatePaste) (models.CreatePasteResponse, error)
 	FetchPaste(id string, options models.FetchPasteOptions) (models.PasteResponse, error)
+	FetchFile(pasteID, fileID string, options models.FetchPasteOptions) (models.File, error)
 	FetchSecurity(token string) (models.Security, error)
 	DeleteFile(token, fileID string) error
 	DeletePaste(token string) error

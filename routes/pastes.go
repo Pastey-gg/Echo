@@ -19,6 +19,7 @@ type PasteView struct {
 func (v *PasteView) LoadRoutes() {
 	v.ctx.Server.POST("/pastes", v.createPaste)
 	v.ctx.Server.GET("/pastes/:id", v.getPaste)
+	v.ctx.Server.GET("/pastes/:id/files/:file_id", v.getFile)
 }
 
 func (v *PasteView) createPaste(c *echo.Context) error {
@@ -56,9 +57,7 @@ func (v *PasteView) createPaste(c *echo.Context) error {
 	return c.JSON(http.StatusCreated, paste)
 }
 
-func (v *PasteView) getPaste(c *echo.Context) error {
-	id := c.Param("id")
-
+func fetchPasteOptions(c *echo.Context) models.FetchPasteOptions {
 	password := c.Request().Header.Get("Authorization")
 	var pw *string
 	if password != "" {
@@ -71,11 +70,16 @@ func (v *PasteView) getPaste(c *echo.Context) error {
 		token = &safetyToken
 	}
 
-	options := models.FetchPasteOptions{
+	return models.FetchPasteOptions{
 		PasswordHeader:    pw,
 		SafetyTokenHeader: token,
 		SkipView:          c.QueryParam("skip_view") == "true",
 	}
+}
+
+func (v *PasteView) getPaste(c *echo.Context) error {
+	id := c.Param("id")
+	options := fetchPasteOptions(c)
 
 	paste, err := v.ctx.Database.FetchPaste(id, options)
 	if err != nil {
@@ -91,6 +95,27 @@ func (v *PasteView) getPaste(c *echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, paste)
+}
+
+func (v *PasteView) getFile(c *echo.Context) error {
+	pasteID := c.Param("id")
+	fileID := c.Param("file_id")
+	options := fetchPasteOptions(c)
+
+	file, err := v.ctx.Database.FetchFile(pasteID, fileID, options)
+	if err != nil {
+		switch {
+		case errors.Is(err, models.ErrNotFound):
+			return c.JSON(http.StatusNotFound, map[string]string{"error": "Paste or file not found, or paste has expired."})
+		case errors.Is(err, models.ErrUnauthorized):
+			return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Invalid or missing password or safety token."})
+		}
+
+		v.ctx.Logger.Errorf("Failed to fetch file %s for paste %s: %v", fileID, pasteID, err)
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Internal server error."})
+	}
+
+	return c.JSON(http.StatusOK, file)
 }
 
 func validatePaste(ctx *state.Context, p models.CreatePaste) error {

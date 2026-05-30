@@ -267,9 +267,63 @@ func (p *Postgres) CreatePaste(cp models.CreatePaste) (models.CreatePasteRespons
 	}, nil
 }
 
-func (p *Postgres) FetchPaste(id string, options models.FetchPasteOptions) (models.PasteResponse, error) {
-	ctx := context.Background()
+func (p *Postgres) authorizeAndCountPaste(ctx context.Context, id string, paste models.Paste, hashedPw *string, safetyToken string, options models.FetchPasteOptions) (int, *int, error) {
+	if paste.ExpiresAt != nil && time.Now().After(*paste.ExpiresAt) {
+		p.pool.Exec(ctx, `DELETE FROM pastes WHERE id = $1`, id)
+		return 0, nil, models.ErrNotFound
+	}
 
+	skipView := false
+	if options.SkipView {
+		if options.SafetyTokenHeader != nil && *options.SafetyTokenHeader == safetyToken {
+			skipView = true
+		} else if hashedPw != nil && options.PasswordHeader != nil && *options.PasswordHeader != "" {
+			if err := bcrypt.CompareHashAndPassword([]byte(*hashedPw), []byte(*options.PasswordHeader)); err == nil {
+				skipView = true
+			}
+		}
+
+		if !skipView {
+			return 0, nil, models.ErrUnauthorized
+		}
+	}
+
+	if !skipView && paste.RemainingViews != nil && *paste.RemainingViews <= 0 {
+		p.pool.Exec(ctx, `DELETE FROM pastes WHERE id = $1`, id)
+		return 0, nil, models.ErrNotFound
+	}
+
+	if !skipView && hashedPw != nil {
+		if options.PasswordHeader == nil || *options.PasswordHeader == "" {
+			return 0, nil, models.ErrUnauthorized
+		}
+
+		if err := bcrypt.CompareHashAndPassword([]byte(*hashedPw), []byte(*options.PasswordHeader)); err != nil {
+			return 0, nil, models.ErrUnauthorized
+		}
+	}
+
+	newViews := paste.Views
+	newRemaining := paste.RemainingViews
+
+	if !skipView {
+		err := p.pool.QueryRow(ctx,
+			`UPDATE pastes
+		 SET views = views + 1,
+		     remaining_views = CASE WHEN remaining_views IS NOT NULL THEN remaining_views - 1 ELSE NULL END
+		 WHERE id = $1
+		 RETURNING views, remaining_views`, id,
+		).Scan(&newViews, &newRemaining)
+
+		if err != nil {
+			return 0, nil, err
+		}
+	}
+
+	return newViews, newRemaining, nil
+}
+
+func (p *Postgres) fetchPasteForRead(ctx context.Context, id string) (models.Paste, *string, string, error) {
 	var hashedPw *string
 	var safetyToken string
 	var paste models.Paste
@@ -280,57 +334,27 @@ func (p *Postgres) FetchPaste(id string, options models.FetchPasteOptions) (mode
 	).Scan(&paste.Id, &paste.CreatedAt, &paste.Views, &paste.ExpiresAt, &paste.RemainingViews, &hashedPw, &safetyToken)
 
 	if errors.Is(err, pgx.ErrNoRows) {
-		return models.PasteResponse{}, models.ErrNotFound
+		return models.Paste{}, nil, "", models.ErrNotFound
 	}
 
+	if err != nil {
+		return models.Paste{}, nil, "", err
+	}
+
+	return paste, hashedPw, safetyToken, nil
+}
+
+func (p *Postgres) FetchPaste(id string, options models.FetchPasteOptions) (models.PasteResponse, error) {
+	ctx := context.Background()
+
+	paste, hashedPw, safetyToken, err := p.fetchPasteForRead(ctx, id)
 	if err != nil {
 		return models.PasteResponse{}, err
 	}
 
-	if paste.ExpiresAt != nil && time.Now().After(*paste.ExpiresAt) {
-		p.pool.Exec(ctx, `DELETE FROM pastes WHERE id = $1`, id)
-		return models.PasteResponse{}, models.ErrNotFound
-	}
-
-	skipView := false
-	if options.SkipView {
-		if options.SafetyTokenHeader == nil || *options.SafetyTokenHeader != safetyToken {
-			return models.PasteResponse{}, models.ErrUnauthorized
-		}
-
-		skipView = true
-	}
-
-	if !skipView && paste.RemainingViews != nil && *paste.RemainingViews <= 0 {
-		p.pool.Exec(ctx, `DELETE FROM pastes WHERE id = $1`, id)
-		return models.PasteResponse{}, models.ErrNotFound
-	}
-
-	if !skipView && hashedPw != nil {
-		if options.PasswordHeader == nil || *options.PasswordHeader == "" {
-			return models.PasteResponse{}, models.ErrUnauthorized
-		}
-
-		if err := bcrypt.CompareHashAndPassword([]byte(*hashedPw), []byte(*options.PasswordHeader)); err != nil {
-			return models.PasteResponse{}, models.ErrUnauthorized
-		}
-	}
-
-	newViews := paste.Views
-	newRemaining := paste.RemainingViews
-
-	if !skipView {
-		err = p.pool.QueryRow(ctx,
-			`UPDATE pastes
-		 SET views = views + 1,
-		     remaining_views = CASE WHEN remaining_views IS NOT NULL THEN remaining_views - 1 ELSE NULL END
-		 WHERE id = $1
-		 RETURNING views, remaining_views`, id,
-		).Scan(&newViews, &newRemaining)
-
-		if err != nil {
-			return models.PasteResponse{}, err
-		}
+	newViews, newRemaining, err := p.authorizeAndCountPaste(ctx, id, paste, hashedPw, safetyToken, options)
+	if err != nil {
+		return models.PasteResponse{}, err
 	}
 
 	rows, err := p.pool.Query(ctx,
@@ -363,6 +387,35 @@ func (p *Postgres) FetchPaste(id string, options models.FetchPasteOptions) (mode
 		HasPassword:    hashedPw != nil,
 		Files:          files,
 	}, nil
+}
+
+func (p *Postgres) FetchFile(pasteID, fileID string, options models.FetchPasteOptions) (models.File, error) {
+	ctx := context.Background()
+
+	paste, hashedPw, safetyToken, err := p.fetchPasteForRead(ctx, pasteID)
+	if err != nil {
+		return models.File{}, err
+	}
+
+	if _, _, err := p.authorizeAndCountPaste(ctx, pasteID, paste, hashedPw, safetyToken, options); err != nil {
+		return models.File{}, err
+	}
+
+	var file models.File
+	err = p.pool.QueryRow(ctx,
+		`SELECT id, name, language, content, character_count, line_count
+		 FROM files WHERE paste_id = $1 AND id = $2`, pasteID, fileID,
+	).Scan(&file.Id, &file.Name, &file.Language, &file.Content, &file.CharacterCount, &file.LineCount)
+
+	if errors.Is(err, pgx.ErrNoRows) {
+		return models.File{}, models.ErrNotFound
+	}
+
+	if err != nil {
+		return models.File{}, err
+	}
+
+	return file, nil
 }
 
 func (p *Postgres) FetchSecurity(token string) (models.Security, error) {
