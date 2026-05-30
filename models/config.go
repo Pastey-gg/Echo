@@ -8,6 +8,10 @@ type Config struct {
 		AllowedOrigins []string `yaml:"allowed_origins"`
 	} `yaml:"general"`
 
+	Cache struct {
+		DSN string `yaml:"dsn"`
+	} `yaml:"cache"`
+
 	Database struct {
 		DSN string `yaml:"dsn"`
 	} `yaml:"database"`

@@ -4,8 +4,18 @@ general:
   use_gzip: true
   allowed_origins: ["http://localhost:5173"]
 
+cache:
+  # Docker: use "valkey" as the host - it resolves inside the Docker network.
+  dsn: "redis://valkey:6379/0"
+
+  # Local Valkey or Redis-compatible server
+  # dsn: "redis://localhost:6379/0"
+
+  # Disable cache/rate-limit backing store
+  # dsn: ""
+
 database:
-  # Docker (make up): use "db" as the host — it resolves inside the Docker network.
+  # Docker (make up): use "db" as the host - it resolves inside the Docker network.
   dsn: "postgres://echo:echo@db:5432/echo?sslmode=disable"
   
   # Local requires the superuser

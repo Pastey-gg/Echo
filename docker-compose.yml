@@ -19,6 +19,21 @@ services:
       timeout: 5s
       retries: 10
 
+  valkey:
+    image: valkey/valkey:9-alpine
+    restart: unless-stopped
+    networks:
+      - backend
+    volumes:
+      - valkey_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   app:
     build: .
     restart: unless-stopped
@@ -26,6 +41,9 @@ services:
       - backend
     depends_on:
       db:
+        condition: service_healthy
+        required: false
+      valkey:
         condition: service_healthy
         required: false
     # config.yaml is the single source of truth for all application settings.
@@ -43,3 +61,4 @@ networks:
 
 volumes:
   postgres_data:
+  valkey_data:
