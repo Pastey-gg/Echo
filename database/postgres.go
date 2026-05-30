@@ -42,7 +42,13 @@ func NewPostgres(config *models.Config) (*Postgres, error) {
 		return nil, err
 	}
 
-	return &Postgres{pool: pool, config: config}, nil
+	pg := &Postgres{pool: pool, config: config}
+	if err := pg.purgeDeleted(ctx); err != nil {
+		pool.Close()
+		return nil, err
+	}
+
+	return pg, nil
 }
 
 // newPoolWithBootstrap connects to the target database, creating it first if it
@@ -161,6 +167,18 @@ func applyInitSQL(ctx context.Context, pool *pgxpool.Pool) error {
 
 func (p *Postgres) Ping() error {
 	return p.pool.Ping(context.Background())
+}
+
+func (p *Postgres) PurgeDeleted() error {
+	return p.purgeDeleted(context.Background())
+}
+
+func (p *Postgres) purgeDeleted(ctx context.Context) error {
+	_, err := p.pool.Exec(ctx,
+		`DELETE FROM files WHERE deleted_at < now() - interval '24 hours';
+		 DELETE FROM pastes WHERE deleted_at < now() - interval '24 hours'`,
+	)
+	return err
 }
 
 func (p *Postgres) CreatePaste(cp models.CreatePaste) (models.CreatePasteResponse, error) {
@@ -330,7 +348,7 @@ func (p *Postgres) fetchPasteForRead(ctx context.Context, id string) (models.Pas
 
 	err := p.pool.QueryRow(ctx,
 		`SELECT id, created_at, views, expires_at, remaining_views, hashed_password, safety_token
-		 FROM pastes WHERE id = $1`, id,
+		 FROM pastes WHERE id = $1 AND deleted_at IS NULL`, id,
 	).Scan(&paste.Id, &paste.CreatedAt, &paste.Views, &paste.ExpiresAt, &paste.RemainingViews, &hashedPw, &safetyToken)
 
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -359,7 +377,7 @@ func (p *Postgres) FetchPaste(id string, options models.FetchPasteOptions) (mode
 
 	rows, err := p.pool.Query(ctx,
 		`SELECT id, name, language, content, character_count, line_count
-		 FROM files WHERE paste_id = $1`, id,
+		 FROM files WHERE paste_id = $1 AND deleted_at IS NULL`, id,
 	)
 
 	if err != nil {
@@ -404,7 +422,7 @@ func (p *Postgres) FetchFile(pasteID, fileID string, options models.FetchPasteOp
 	var file models.File
 	err = p.pool.QueryRow(ctx,
 		`SELECT id, name, language, content, character_count, line_count
-		 FROM files WHERE paste_id = $1 AND id = $2`, pasteID, fileID,
+		 FROM files WHERE paste_id = $1 AND id = $2 AND deleted_at IS NULL`, pasteID, fileID,
 	).Scan(&file.Id, &file.Name, &file.Language, &file.Content, &file.CharacterCount, &file.LineCount)
 
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -419,10 +437,12 @@ func (p *Postgres) FetchFile(pasteID, fileID string, options models.FetchPasteOp
 }
 
 func (p *Postgres) FetchSecurity(token string) (models.Security, error) {
+	ctx := context.Background()
+
 	var id string
 
-	err := p.pool.QueryRow(context.Background(),
-		`SELECT id FROM pastes WHERE safety_token = $1`, token,
+	err := p.pool.QueryRow(ctx,
+		`SELECT id FROM pastes WHERE safety_token = $1 AND deleted_at IS NULL`, token,
 	).Scan(&id)
 
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -447,7 +467,7 @@ func (p *Postgres) DeleteFile(pasteID, fileID, token string) error {
 
 	var fetchedPasteID string
 	err = tx.QueryRow(ctx,
-		`SELECT id FROM pastes WHERE id = $1 AND safety_token = $2 FOR UPDATE`, pasteID, token,
+		`SELECT id FROM pastes WHERE id = $1 AND safety_token = $2 AND deleted_at IS NULL FOR UPDATE`, pasteID, token,
 	).Scan(&fetchedPasteID)
 
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -459,12 +479,18 @@ func (p *Postgres) DeleteFile(pasteID, fileID, token string) error {
 	}
 
 	var fileCount int
+	var targetFileCount int
 	err = tx.QueryRow(ctx,
-		`SELECT COUNT(*) FROM files WHERE paste_id = $1`, pasteID,
-	).Scan(&fileCount)
+		`SELECT COUNT(*), COUNT(*) FILTER (WHERE id = $2)
+		 FROM files WHERE paste_id = $1 AND deleted_at IS NULL`, pasteID, fileID,
+	).Scan(&fileCount, &targetFileCount)
 
 	if err != nil {
 		return err
+	}
+
+	if targetFileCount == 0 {
+		return models.ErrNotFound
 	}
 
 	if fileCount <= 1 {
@@ -472,7 +498,7 @@ func (p *Postgres) DeleteFile(pasteID, fileID, token string) error {
 	}
 
 	tag, err := tx.Exec(ctx,
-		`DELETE FROM files WHERE id = $1 AND paste_id = $2`, fileID, pasteID,
+		`UPDATE files SET deleted_at = now() WHERE id = $1 AND paste_id = $2 AND deleted_at IS NULL`, fileID, pasteID,
 	)
 
 	if err != nil {
@@ -487,8 +513,10 @@ func (p *Postgres) DeleteFile(pasteID, fileID, token string) error {
 }
 
 func (p *Postgres) DeletePaste(pasteID, token string) error {
-	tag, err := p.pool.Exec(context.Background(),
-		`DELETE FROM pastes WHERE id = $1 AND safety_token = $2`, pasteID, token,
+	ctx := context.Background()
+
+	tag, err := p.pool.Exec(ctx,
+		`UPDATE pastes SET deleted_at = now() WHERE id = $1 AND safety_token = $2 AND deleted_at IS NULL`, pasteID, token,
 	)
 
 	if err != nil {

@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/EvieePy/Echo/database"
 	"github.com/EvieePy/Echo/logger"
@@ -12,6 +13,8 @@ import (
 	"github.com/labstack/echo/v5/middleware"
 	"gopkg.in/yaml.v3"
 )
+
+const purgeDeletedInterval = 12 * time.Hour
 
 type Context struct {
 	Server        *echo.Echo
@@ -54,6 +57,20 @@ func loadDatabase(config *models.Config, appLogger *logger.Logger) database.Data
 	return db
 }
 
+func startPurgeLoop(db database.Database, appLogger *logger.Logger) {
+	ticker := time.NewTicker(purgeDeletedInterval)
+
+	go func() {
+		defer ticker.Stop()
+
+		for range ticker.C {
+			if err := db.PurgeDeleted(); err != nil {
+				appLogger.Errorf("Failed to purge soft-deleted data: %v", err)
+			}
+		}
+	}()
+}
+
 func loadMiddleware(server *echo.Echo, config *models.Config, reqLogger *logger.Logger) {
 	server.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
 		LogStatus:  true,
@@ -86,6 +103,7 @@ func NewContext() *Context {
 
 	config := loadConfig(appLogger)
 	db := loadDatabase(&config, appLogger)
+	startPurgeLoop(db, appLogger)
 	loadMiddleware(server, &config, reqLogger)
 	verInfo := NewVersionInfo(appLogger)
 

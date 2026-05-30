@@ -1,5 +1,7 @@
 package models
 
+import "time"
+
 type CreateFile struct {
 	Name     *string `json:"name"`
 	Language *string `json:"language"`
@@ -7,8 +9,9 @@ type CreateFile struct {
 }
 
 type File struct {
-	Id             string `json:"id"`
-	CharacterCount int    `json:"character_count"`
-	LineCount      int    `json:"line_count"`
+	DeletedAt      *time.Time `json:"-"`
+	Id             string     `json:"id"`
+	CharacterCount int        `json:"character_count"`
+	LineCount      int        `json:"line_count"`
 	CreateFile
 }

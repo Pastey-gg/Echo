@@ -30,6 +30,33 @@ func NewMemory(config *models.Config) *Memory {
 	}
 }
 
+func (m *Memory) purgeDeleted(now time.Time) {
+	cutoff := now.Add(-softDeleteRetention)
+
+	for id, sp := range m.pastes {
+		if sp.paste.DeletedAt != nil && sp.paste.DeletedAt.Before(cutoff) {
+			delete(m.pastes, id)
+			delete(m.tokens, sp.safetyToken)
+			continue
+		}
+
+		activeFiles := sp.paste.Files[:0]
+		for _, f := range sp.paste.Files {
+			if f.DeletedAt == nil || !f.DeletedAt.Before(cutoff) {
+				activeFiles = append(activeFiles, f)
+			}
+		}
+		sp.paste.Files = activeFiles
+	}
+}
+
+func (m *Memory) PurgeDeleted() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	return nil
+}
+
 func (m *Memory) Ping() error { return nil }
 
 func (m *Memory) CreatePaste(p models.CreatePaste) (models.CreatePasteResponse, error) {
@@ -93,6 +120,10 @@ func (m *Memory) CreatePaste(p models.CreatePaste) (models.CreatePasteResponse, 
 }
 
 func (m *Memory) authorizeAndCountPaste(id string, sp *storedPaste, options models.FetchPasteOptions) error {
+	if sp.paste.DeletedAt != nil {
+		return models.ErrNotFound
+	}
+
 	if sp.paste.ExpiresAt != nil && time.Now().After(*sp.paste.ExpiresAt) {
 		delete(m.pastes, id)
 		delete(m.tokens, sp.safetyToken)
@@ -154,6 +185,13 @@ func (m *Memory) FetchPaste(id string, options models.FetchPasteOptions) (models
 		return models.PasteResponse{}, err
 	}
 
+	files := make([]models.File, 0, len(sp.paste.Files))
+	for _, f := range sp.paste.Files {
+		if f.DeletedAt == nil {
+			files = append(files, f)
+		}
+	}
+
 	return models.PasteResponse{
 		Id:             sp.paste.Id,
 		CreatedAt:      sp.paste.CreatedAt,
@@ -161,7 +199,7 @@ func (m *Memory) FetchPaste(id string, options models.FetchPasteOptions) (models
 		ExpiresAt:      sp.paste.ExpiresAt,
 		RemainingViews: sp.paste.RemainingViews,
 		HasPassword:    sp.hashedPassword != nil,
-		Files:          sp.paste.Files,
+		Files:          files,
 	}, nil
 }
 
@@ -180,6 +218,10 @@ func (m *Memory) FetchFile(pasteID, fileID string, options models.FetchPasteOpti
 
 	for _, f := range sp.paste.Files {
 		if f.Id == fileID {
+			if f.DeletedAt != nil {
+				return models.File{}, models.ErrNotFound
+			}
+
 			return f, nil
 		}
 	}
@@ -188,11 +230,17 @@ func (m *Memory) FetchFile(pasteID, fileID string, options models.FetchPasteOpti
 }
 
 func (m *Memory) FetchSecurity(token string) (models.Security, error) {
-	m.mu.RLock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	id, ok := m.tokens[token]
-	m.mu.RUnlock()
 
 	if !ok {
+		return models.Security{}, models.ErrNotFound
+	}
+
+	sp, ok := m.pastes[id]
+	if !ok || sp.paste.DeletedAt != nil {
 		return models.Security{}, models.ErrNotFound
 	}
 
@@ -203,21 +251,27 @@ func (m *Memory) DeleteFile(pasteID, fileID, token string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	now := time.Now().UTC()
+
 	id, ok := m.tokens[token]
 	if !ok || id != pasteID {
 		return models.ErrNotFound
 	}
 
 	sp, ok := m.pastes[pasteID]
-	if !ok {
+	if !ok || sp.paste.DeletedAt != nil {
 		return models.ErrNotFound
 	}
 
 	idx := -1
+	activeFileCount := 0
 	for i, f := range sp.paste.Files {
-		if f.Id == fileID {
+		if f.DeletedAt == nil {
+			activeFileCount++
+		}
+
+		if f.Id == fileID && f.DeletedAt == nil {
 			idx = i
-			break
 		}
 	}
 
@@ -225,11 +279,11 @@ func (m *Memory) DeleteFile(pasteID, fileID, token string) error {
 		return models.ErrNotFound
 	}
 
-	if len(sp.paste.Files) <= 1 {
+	if activeFileCount <= 1 {
 		return models.ErrConflict
 	}
 
-	sp.paste.Files = append(sp.paste.Files[:idx], sp.paste.Files[idx+1:]...)
+	sp.paste.Files[idx].DeletedAt = &now
 	return nil
 }
 
@@ -237,12 +291,18 @@ func (m *Memory) DeletePaste(pasteID, token string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	now := time.Now().UTC()
+
 	id, ok := m.tokens[token]
 	if !ok || id != pasteID {
 		return models.ErrNotFound
 	}
 
-	delete(m.pastes, pasteID)
-	delete(m.tokens, token)
+	sp, ok := m.pastes[pasteID]
+	if !ok || sp.paste.DeletedAt != nil {
+		return models.ErrNotFound
+	}
+
+	sp.paste.DeletedAt = &now
 	return nil
 }

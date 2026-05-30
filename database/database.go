@@ -3,11 +3,15 @@ package database
 import (
 	"crypto/rand"
 	"math/big"
+	"time"
 
 	"github.com/EvieePy/Echo/models"
 )
 
-const idChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+const (
+	idChars             = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	softDeleteRetention = 24 * time.Hour
+)
 
 type Database interface {
 	CreatePaste(p models.CreatePaste) (models.CreatePasteResponse, error)
@@ -16,6 +20,7 @@ type Database interface {
 	FetchSecurity(token string) (models.Security, error)
 	DeleteFile(pasteID, fileID, token string) error
 	DeletePaste(pasteID, token string) error
+	PurgeDeleted() error
 	Ping() error
 }
 
