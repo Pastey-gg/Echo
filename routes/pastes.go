@@ -65,13 +65,25 @@ func (v *PasteView) getPaste(c *echo.Context) error {
 		pw = &password
 	}
 
-	paste, err := v.ctx.Database.FetchPaste(id, pw)
+	safetyToken := c.Request().Header.Get("X-Safety-Token")
+	var token *string
+	if safetyToken != "" {
+		token = &safetyToken
+	}
+
+	options := models.FetchPasteOptions{
+		PasswordHeader:    pw,
+		SafetyTokenHeader: token,
+		SkipView:          c.QueryParam("skip_view") == "true",
+	}
+
+	paste, err := v.ctx.Database.FetchPaste(id, options)
 	if err != nil {
 		switch {
 		case errors.Is(err, models.ErrNotFound):
 			return c.JSON(http.StatusNotFound, map[string]string{"error": "Paste not found or has expired."})
 		case errors.Is(err, models.ErrUnauthorized):
-			return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Invalid or missing password."})
+			return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Invalid or missing password or safety token."})
 		}
 
 		v.ctx.Logger.Errorf("Failed to fetch paste %s: %v", id, err)

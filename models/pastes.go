@@ -30,6 +30,12 @@ type Paste struct {
 	Files          []File     `json:"files"`
 }
 
+type FetchPasteOptions struct {
+	PasswordHeader    *string
+	SafetyTokenHeader *string
+	SkipView          bool
+}
+
 // PasteResponse is returned by GET /pastes/:id.
 type PasteResponse struct {
 	Id             string     `json:"id"`

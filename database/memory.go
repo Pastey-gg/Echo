@@ -92,7 +92,7 @@ func (m *Memory) CreatePaste(p models.CreatePaste) (models.CreatePasteResponse, 
 	}, nil
 }
 
-func (m *Memory) FetchPaste(id string, password *string) (models.PasteResponse, error) {
+func (m *Memory) FetchPaste(id string, options models.FetchPasteOptions) (models.PasteResponse, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -107,26 +107,37 @@ func (m *Memory) FetchPaste(id string, password *string) (models.PasteResponse, 
 		return models.PasteResponse{}, models.ErrNotFound
 	}
 
-	if sp.paste.RemainingViews != nil && *sp.paste.RemainingViews <= 0 {
+	skipView := false
+	if options.SkipView {
+		if options.SafetyTokenHeader == nil || *options.SafetyTokenHeader != sp.safetyToken {
+			return models.PasteResponse{}, models.ErrUnauthorized
+		}
+
+		skipView = true
+	}
+
+	if !skipView && sp.paste.RemainingViews != nil && *sp.paste.RemainingViews <= 0 {
 		delete(m.pastes, id)
 		delete(m.tokens, sp.safetyToken)
 		return models.PasteResponse{}, models.ErrNotFound
 	}
 
-	if sp.hashedPassword != nil {
-		if password == nil || *password == "" {
+	if !skipView && sp.hashedPassword != nil {
+		if options.PasswordHeader == nil || *options.PasswordHeader == "" {
 			return models.PasteResponse{}, models.ErrUnauthorized
 		}
 
-		if err := bcrypt.CompareHashAndPassword(sp.hashedPassword, []byte(*password)); err != nil {
+		if err := bcrypt.CompareHashAndPassword(sp.hashedPassword, []byte(*options.PasswordHeader)); err != nil {
 			return models.PasteResponse{}, models.ErrUnauthorized
 		}
 	}
 
-	sp.paste.Views++
-	if sp.paste.RemainingViews != nil {
-		remaining := *sp.paste.RemainingViews - 1
-		sp.paste.RemainingViews = &remaining
+	if !skipView {
+		sp.paste.Views++
+		if sp.paste.RemainingViews != nil {
+			remaining := *sp.paste.RemainingViews - 1
+			sp.paste.RemainingViews = &remaining
+		}
 	}
 
 	return models.PasteResponse{

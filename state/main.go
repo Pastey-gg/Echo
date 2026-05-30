@@ -73,7 +73,7 @@ func loadMiddleware(server *echo.Echo, config *models.Config, reqLogger *logger.
 	server.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowMethods: []string{http.MethodOptions, http.MethodGet, http.MethodPost, http.MethodDelete},
 		AllowOrigins: config.General.AllowedOrigins,
-		AllowHeaders: []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAccept, echo.HeaderAuthorization},
+		AllowHeaders: []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAccept, echo.HeaderAuthorization, "X-Safety-Token"},
 	}))
 }
 

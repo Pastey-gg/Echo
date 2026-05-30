@@ -267,16 +267,17 @@ func (p *Postgres) CreatePaste(cp models.CreatePaste) (models.CreatePasteRespons
 	}, nil
 }
 
-func (p *Postgres) FetchPaste(id string, password *string) (models.PasteResponse, error) {
+func (p *Postgres) FetchPaste(id string, options models.FetchPasteOptions) (models.PasteResponse, error) {
 	ctx := context.Background()
 
 	var hashedPw *string
+	var safetyToken string
 	var paste models.Paste
 
 	err := p.pool.QueryRow(ctx,
-		`SELECT id, created_at, views, expires_at, remaining_views, hashed_password
+		`SELECT id, created_at, views, expires_at, remaining_views, hashed_password, safety_token
 		 FROM pastes WHERE id = $1`, id,
-	).Scan(&paste.Id, &paste.CreatedAt, &paste.Views, &paste.ExpiresAt, &paste.RemainingViews, &hashedPw)
+	).Scan(&paste.Id, &paste.CreatedAt, &paste.Views, &paste.ExpiresAt, &paste.RemainingViews, &hashedPw, &safetyToken)
 
 	if errors.Is(err, pgx.ErrNoRows) {
 		return models.PasteResponse{}, models.ErrNotFound
@@ -291,34 +292,45 @@ func (p *Postgres) FetchPaste(id string, password *string) (models.PasteResponse
 		return models.PasteResponse{}, models.ErrNotFound
 	}
 
-	if paste.RemainingViews != nil && *paste.RemainingViews <= 0 {
+	skipView := false
+	if options.SkipView {
+		if options.SafetyTokenHeader == nil || *options.SafetyTokenHeader != safetyToken {
+			return models.PasteResponse{}, models.ErrUnauthorized
+		}
+
+		skipView = true
+	}
+
+	if !skipView && paste.RemainingViews != nil && *paste.RemainingViews <= 0 {
 		p.pool.Exec(ctx, `DELETE FROM pastes WHERE id = $1`, id)
 		return models.PasteResponse{}, models.ErrNotFound
 	}
 
-	if hashedPw != nil {
-		if password == nil || *password == "" {
+	if !skipView && hashedPw != nil {
+		if options.PasswordHeader == nil || *options.PasswordHeader == "" {
 			return models.PasteResponse{}, models.ErrUnauthorized
 		}
 
-		if err := bcrypt.CompareHashAndPassword([]byte(*hashedPw), []byte(*password)); err != nil {
+		if err := bcrypt.CompareHashAndPassword([]byte(*hashedPw), []byte(*options.PasswordHeader)); err != nil {
 			return models.PasteResponse{}, models.ErrUnauthorized
 		}
 	}
 
-	var newViews int
-	var newRemaining *int
+	newViews := paste.Views
+	newRemaining := paste.RemainingViews
 
-	err = p.pool.QueryRow(ctx,
-		`UPDATE pastes
+	if !skipView {
+		err = p.pool.QueryRow(ctx,
+			`UPDATE pastes
 		 SET views = views + 1,
 		     remaining_views = CASE WHEN remaining_views IS NOT NULL THEN remaining_views - 1 ELSE NULL END
 		 WHERE id = $1
 		 RETURNING views, remaining_views`, id,
-	).Scan(&newViews, &newRemaining)
+		).Scan(&newViews, &newRemaining)
 
-	if err != nil {
-		return models.PasteResponse{}, err
+		if err != nil {
+			return models.PasteResponse{}, err
+		}
 	}
 
 	rows, err := p.pool.Query(ctx,
