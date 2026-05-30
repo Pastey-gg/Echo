@@ -14,8 +14,8 @@ type Database interface {
 	FetchPaste(id string, options models.FetchPasteOptions) (models.PasteResponse, error)
 	FetchFile(pasteID, fileID string, options models.FetchPasteOptions) (models.File, error)
 	FetchSecurity(token string) (models.Security, error)
-	DeleteFile(token, fileID string) error
-	DeletePaste(token string) error
+	DeleteFile(pasteID, fileID, token string) error
+	DeletePaste(pasteID, token string) error
 	Ping() error
 }
 

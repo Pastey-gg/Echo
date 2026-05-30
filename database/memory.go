@@ -199,16 +199,16 @@ func (m *Memory) FetchSecurity(token string) (models.Security, error) {
 	return models.Security{PasteID: id, SafetyToken: token}, nil
 }
 
-func (m *Memory) DeleteFile(token, fileID string) error {
+func (m *Memory) DeleteFile(pasteID, fileID, token string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	id, ok := m.tokens[token]
-	if !ok {
+	if !ok || id != pasteID {
 		return models.ErrNotFound
 	}
 
-	sp, ok := m.pastes[id]
+	sp, ok := m.pastes[pasteID]
 	if !ok {
 		return models.ErrNotFound
 	}
@@ -233,16 +233,16 @@ func (m *Memory) DeleteFile(token, fileID string) error {
 	return nil
 }
 
-func (m *Memory) DeletePaste(token string) error {
+func (m *Memory) DeletePaste(pasteID, token string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	id, ok := m.tokens[token]
-	if !ok {
+	if !ok || id != pasteID {
 		return models.ErrNotFound
 	}
 
-	delete(m.pastes, id)
+	delete(m.pastes, pasteID)
 	delete(m.tokens, token)
 	return nil
 }

@@ -436,7 +436,7 @@ func (p *Postgres) FetchSecurity(token string) (models.Security, error) {
 	return models.Security{PasteID: id, SafetyToken: token}, nil
 }
 
-func (p *Postgres) DeleteFile(token, fileID string) error {
+func (p *Postgres) DeleteFile(pasteID, fileID, token string) error {
 	ctx := context.Background()
 
 	tx, err := p.pool.Begin(ctx)
@@ -445,10 +445,10 @@ func (p *Postgres) DeleteFile(token, fileID string) error {
 	}
 	defer tx.Rollback(ctx)
 
-	var pasteID string
+	var fetchedPasteID string
 	err = tx.QueryRow(ctx,
-		`SELECT id FROM pastes WHERE safety_token = $1 FOR UPDATE`, token,
-	).Scan(&pasteID)
+		`SELECT id FROM pastes WHERE id = $1 AND safety_token = $2 FOR UPDATE`, pasteID, token,
+	).Scan(&fetchedPasteID)
 
 	if errors.Is(err, pgx.ErrNoRows) {
 		return models.ErrNotFound
@@ -486,9 +486,9 @@ func (p *Postgres) DeleteFile(token, fileID string) error {
 	return tx.Commit(ctx)
 }
 
-func (p *Postgres) DeletePaste(token string) error {
+func (p *Postgres) DeletePaste(pasteID, token string) error {
 	tag, err := p.pool.Exec(context.Background(),
-		`DELETE FROM pastes WHERE safety_token = $1`, token,
+		`DELETE FROM pastes WHERE id = $1 AND safety_token = $2`, pasteID, token,
 	)
 
 	if err != nil {

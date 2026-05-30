@@ -20,6 +20,8 @@ func (v *PasteView) LoadRoutes() {
 	v.ctx.Server.POST("/pastes", v.createPaste)
 	v.ctx.Server.GET("/pastes/:id", v.getPaste)
 	v.ctx.Server.GET("/pastes/:id/files/:file_id", v.getFile)
+	v.ctx.Server.DELETE("/pastes/:id", v.deletePaste)
+	v.ctx.Server.DELETE("/pastes/:id/files/:file_id", v.deleteFile)
 }
 
 func (v *PasteView) createPaste(c *echo.Context) error {
@@ -116,6 +118,53 @@ func (v *PasteView) getFile(c *echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, file)
+}
+
+func safetyTokenHeader(c *echo.Context) (string, bool) {
+	token := c.Request().Header.Get("X-Safety-Token")
+	return token, token != ""
+}
+
+func (v *PasteView) deletePaste(c *echo.Context) error {
+	pasteID := c.Param("id")
+	token, ok := safetyTokenHeader(c)
+	if !ok {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Missing safety token."})
+	}
+
+	if err := v.ctx.Database.DeletePaste(pasteID, token); err != nil {
+		if errors.Is(err, models.ErrNotFound) {
+			return c.JSON(http.StatusNotFound, map[string]string{"error": "Paste not found or safety token is invalid."})
+		}
+
+		v.ctx.Logger.Errorf("Failed to delete paste %s: %v", pasteID, err)
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Internal server error."})
+	}
+
+	return c.NoContent(http.StatusNoContent)
+}
+
+func (v *PasteView) deleteFile(c *echo.Context) error {
+	pasteID := c.Param("id")
+	fileID := c.Param("file_id")
+	token, ok := safetyTokenHeader(c)
+	if !ok {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Missing safety token."})
+	}
+
+	if err := v.ctx.Database.DeleteFile(pasteID, fileID, token); err != nil {
+		switch {
+		case errors.Is(err, models.ErrNotFound):
+			return c.JSON(http.StatusNotFound, map[string]string{"error": "Paste, file, or safety token not found."})
+		case errors.Is(err, models.ErrConflict):
+			return c.JSON(http.StatusConflict, map[string]string{"error": "Cannot delete the last file in a paste; delete the paste instead."})
+		}
+
+		v.ctx.Logger.Errorf("Failed to delete file %s for paste %s: %v", fileID, pasteID, err)
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Internal server error."})
+	}
+
+	return c.NoContent(http.StatusNoContent)
 }
 
 func validatePaste(ctx *state.Context, p models.CreatePaste) error {
