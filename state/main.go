@@ -23,6 +23,7 @@ type Context struct {
 	RequestLogger *logger.Logger
 	Database      database.Database
 	VersionInfo   *VersionInfo
+	Valkey        *database.Valkey
 }
 
 func loadConfig(appLogger *logger.Logger) models.Config {
@@ -55,6 +56,20 @@ func loadDatabase(config *models.Config, appLogger *logger.Logger) database.Data
 	}
 
 	return db
+}
+
+func loadValkey(config *models.Config, appLogger *logger.Logger) *database.Valkey {
+	if config.Cache.DSN == "" {
+		appLogger.Warn("No Valkey configuration was found. Ratelimits will not be implemented.")
+		return nil
+	}
+
+	valk, err := database.NewValkey(config)
+	if err != nil {
+		panic(err)
+	}
+	appLogger.Info("Successfully connected to Valkey.")
+	return valk
 }
 
 func startPurgeLoop(db database.Database, appLogger *logger.Logger) {
@@ -106,6 +121,7 @@ func NewContext() *Context {
 	startPurgeLoop(db, appLogger)
 	loadMiddleware(server, &config, reqLogger)
 	verInfo := NewVersionInfo(appLogger)
+	valk := loadValkey(&config, appLogger)
 
 	return &Context{
 		Server:        server,
@@ -114,5 +130,6 @@ func NewContext() *Context {
 		RequestLogger: reqLogger,
 		Database:      db,
 		VersionInfo:   &verInfo,
+		Valkey:        valk,
 	}
 }

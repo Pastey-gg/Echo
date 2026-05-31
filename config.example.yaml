@@ -30,3 +30,9 @@ pastes:
   max_file_size: 350000
   id_length: 8
   token_length: 32
+
+ratelimits:
+  - route:         # Route path e.g. /pastes
+    method: "GET"  # HTTP Method. e.g. GET (Defaults to GET) if not passed.
+    rate: 10       # X per Y seconds
+    per: 60        # as seconds

@@ -1,5 +1,12 @@
 package models
 
+type RateLimitT struct {
+	Route  string `yaml:"route"`
+	Method string `yaml:"method"`
+	Rate   int    `yaml:"rate"`
+	Per    int    `yaml:"per"`
+}
+
 type Config struct {
 	General struct {
 		Host           string   `yaml:"host"`
@@ -22,4 +29,6 @@ type Config struct {
 		IdLen       int `yaml:"id_length"`
 		TokenLen    int `yaml:"token_length"`
 	} `yaml:"pastes"`
+
+	Limits []RateLimitT `yaml:"ratelimits"`
 }
