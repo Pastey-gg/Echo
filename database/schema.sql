@@ -1,6 +1,7 @@
 CREATE TABLE IF NOT EXISTS pastes (
     id              TEXT   PRIMARY KEY,
     created_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    web             BOOLEAN NOT NULL,
     views           INT          NOT NULL DEFAULT 0,
     expires_at      TIMESTAMPTZ,
     deleted_at      TIMESTAMPTZ,

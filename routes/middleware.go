@@ -60,7 +60,6 @@ func (v *MiddlewareView) rateLimiter(next echo.HandlerFunc) echo.HandlerFunc {
 			panic(err)
 		}
 		timestampS := fmt.Sprintf("%s:%d", strconv.FormatInt(nowTs, 10), randInt)
-		v.ctx.Logger.Infof("%s", timestampS)
 
 		background := context.Background()
 		result := v.ctx.Valkey.Lua.Exec(
@@ -77,8 +76,6 @@ func (v *MiddlewareView) rateLimiter(next echo.HandlerFunc) echo.HandlerFunc {
 		allowed := rslice[0] == 1
 		remaining := rslice[1]
 		retry := rslice[2] / 1000
-
-		v.ctx.Logger.Infof("%d", retry)
 
 		c.Response().Header().Set("X-RateLimit-Remaining", strconv.FormatInt(remaining, 10))
 		c.Response().Header().Set("X-RateLimit-Limit", rateS)

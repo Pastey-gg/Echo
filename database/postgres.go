@@ -237,10 +237,10 @@ func (p *Postgres) CreatePaste(cp models.CreatePaste) (models.CreatePasteRespons
 		}
 
 		err = tx.QueryRow(ctx,
-			`INSERT INTO pastes (id, expires_at, remaining_views, hashed_password, safety_token)
-			 VALUES ($1, $2, $3, $4, $5)
+			`INSERT INTO pastes (id, web, expires_at, remaining_views, hashed_password, safety_token)
+			 VALUES ($1, $2, $3, $4, $5, $6)
 			 RETURNING created_at`,
-			id, cp.ExpiresAt, cp.RemainingViews, hashedPwStr, token,
+			id, cp.Web, cp.ExpiresAt, cp.RemainingViews, hashedPwStr, token,
 		).Scan(&createdAt)
 
 		if err != nil {
@@ -281,6 +281,7 @@ func (p *Postgres) CreatePaste(cp models.CreatePaste) (models.CreatePasteRespons
 			RemainingViews: cp.RemainingViews,
 			HasPassword:    hashedPw != nil,
 			Files:          files,
+			Web:            cp.Web,
 		},
 	}, nil
 }
@@ -347,9 +348,9 @@ func (p *Postgres) fetchPasteForRead(ctx context.Context, id string) (models.Pas
 	var paste models.Paste
 
 	err := p.pool.QueryRow(ctx,
-		`SELECT id, created_at, views, expires_at, remaining_views, hashed_password, safety_token
+		`SELECT id, web, created_at, views, expires_at, remaining_views, hashed_password, safety_token
 		 FROM pastes WHERE id = $1 AND deleted_at IS NULL`, id,
-	).Scan(&paste.Id, &paste.CreatedAt, &paste.Views, &paste.ExpiresAt, &paste.RemainingViews, &hashedPw, &safetyToken)
+	).Scan(&paste.Id, &paste.Web, &paste.CreatedAt, &paste.Views, &paste.ExpiresAt, &paste.RemainingViews, &hashedPw, &safetyToken)
 
 	if errors.Is(err, pgx.ErrNoRows) {
 		return models.Paste{}, nil, "", models.ErrNotFound
@@ -404,6 +405,7 @@ func (p *Postgres) FetchPaste(id string, options models.FetchPasteOptions) (mode
 		RemainingViews: newRemaining,
 		HasPassword:    hashedPw != nil,
 		Files:          files,
+		Web:            paste.Web,
 	}, nil
 }
 

@@ -26,6 +26,7 @@ func (v *PasteView) LoadRoutes() {
 
 func (v *PasteView) createPaste(c *echo.Context) error {
 	contentType := c.Request().Header.Get("Content-Type")
+	viaWeb := c.QueryParam("web") == "true"
 
 	var data models.CreatePaste
 
@@ -50,6 +51,7 @@ func (v *PasteView) createPaste(c *echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
 
+	data.Web = viaWeb
 	paste, err := v.ctx.Database.CreatePaste(data)
 	if err != nil {
 		v.ctx.Logger.Errorf("Failed to create paste: %v", err)
