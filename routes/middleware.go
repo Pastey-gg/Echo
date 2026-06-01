@@ -1,7 +1,6 @@
 package routes
 
 import (
-	"context"
 	"crypto/rand"
 	"fmt"
 	"math/big"
@@ -23,11 +22,11 @@ func (v *MiddlewareView) LoadRoutes() {
 
 func (v *MiddlewareView) rateLimiter(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c *echo.Context) error {
-		clientKey := c.RealIP()
+		clientIP := c.RealIP()
 
 		// Check if we have valkey and if the request is not local...
 		// TODO: ...
-		// if clientKey == "::1" {
+		// if clientIP == "::1" {
 		// 	return next(c)
 		// }
 		if v.ctx.Valkey == nil {
@@ -61,21 +60,22 @@ func (v *MiddlewareView) rateLimiter(next echo.HandlerFunc) echo.HandlerFunc {
 		}
 		timestampS := fmt.Sprintf("%s:%d", strconv.FormatInt(nowTs, 10), randInt)
 
-		background := context.Background()
+		clientKey := fmt.Sprintf("ratelimit:%s:%s:%s", request.Method, c.Path(), clientIP)
 		result := v.ctx.Valkey.Lua.Exec(
-			background,
-			*v.ctx.Valkey.Client,
+			request.Context(),
+			v.ctx.Valkey.Client,
 			[]string{clientKey},
 			[]string{rateS, perS, nowS, timestampS})
 
 		rslice, err := result.AsIntSlice()
 		if err != nil {
+			v.ctx.Logger.Errorf("rate limiter failed: %v", err)
 			return next(c)
 		}
 
 		allowed := rslice[0] == 1
 		remaining := rslice[1]
-		retry := rslice[2] / 1000
+		retry := (rslice[2] + 999) / 1000
 
 		c.Response().Header().Set("X-RateLimit-Remaining", strconv.FormatInt(remaining, 10))
 		c.Response().Header().Set("X-RateLimit-Limit", rateS)

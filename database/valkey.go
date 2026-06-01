@@ -37,7 +37,7 @@ return { 0, 0, retry_after_ms }
 `
 
 type Valkey struct {
-	Client *valkey.Client
+	Client valkey.Client
 	Lua    *valkey.Lua
 }
 
@@ -54,5 +54,5 @@ func NewValkey(config *models.Config) (*Valkey, error) {
 	}
 
 	lua := valkey.NewLuaScript(VK_RATELIMIT_SCRIPT)
-	return &Valkey{Client: &client, Lua: lua}, nil
+	return &Valkey{Client: client, Lua: lua}, nil
 }
