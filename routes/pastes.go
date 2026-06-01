@@ -19,6 +19,7 @@ type PasteView struct {
 func (v *PasteView) LoadRoutes() {
 	v.ctx.Server.POST("/pastes", v.createPaste)
 	v.ctx.Server.GET("/pastes/:id", v.getPaste)
+	v.ctx.Server.GET("/pastes/:id/raw", v.getPasteRaw)
 	v.ctx.Server.GET("/pastes/:id/files/:file_id", v.getFile)
 	v.ctx.Server.DELETE("/pastes/:id", v.deletePaste)
 	v.ctx.Server.DELETE("/pastes/:id/files/:file_id", v.deleteFile)
@@ -99,6 +100,54 @@ func (v *PasteView) getPaste(c *echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, paste)
+}
+
+func rawPasteFilename(paste models.PasteResponse) string {
+	if len(paste.Files) == 1 && paste.Files[0].Name != nil && *paste.Files[0].Name != "" {
+		return strings.NewReplacer("\\", "_", "\"", "_", "\r", "_", "\n", "_").Replace(*paste.Files[0].Name)
+	}
+
+	return paste.Id + ".txt"
+}
+
+func rawPasteContent(paste models.PasteResponse) string {
+	if len(paste.Files) == 1 {
+		return paste.Files[0].Content
+	}
+
+	parts := make([]string, 0, len(paste.Files))
+	for i, file := range paste.Files {
+		name := fmt.Sprintf("File %d", i+1)
+		if file.Name != nil && *file.Name != "" {
+			name = *file.Name
+		}
+
+		parts = append(parts, fmt.Sprintf("--- %s ---\n%s", name, file.Content))
+	}
+
+	return strings.Join(parts, "\n\n")
+}
+
+func (v *PasteView) getPasteRaw(c *echo.Context) error {
+	id := c.Param("id")
+	options := fetchPasteOptions(c)
+
+	paste, err := v.ctx.Database.FetchPaste(id, options)
+	if err != nil {
+		switch {
+		case errors.Is(err, models.ErrNotFound):
+			return c.JSON(http.StatusNotFound, map[string]string{"error": "Paste not found or has expired."})
+		case errors.Is(err, models.ErrUnauthorized):
+			return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Invalid or missing password or safety token."})
+		}
+
+		v.ctx.Logger.Errorf("Failed to fetch raw paste %s: %v", id, err)
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Internal server error."})
+	}
+
+	c.Response().Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=\"%s\"", rawPasteFilename(paste)))
+	c.Response().Header().Set("X-Content-Type-Options", "nosniff")
+	return c.String(http.StatusOK, rawPasteContent(paste))
 }
 
 func (v *PasteView) getFile(c *echo.Context) error {
