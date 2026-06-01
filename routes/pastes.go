@@ -116,13 +116,8 @@ func rawPasteContent(paste models.PasteResponse) string {
 	}
 
 	parts := make([]string, 0, len(paste.Files))
-	for i, file := range paste.Files {
-		name := fmt.Sprintf("File %d", i+1)
-		if file.Name != nil && *file.Name != "" {
-			name = *file.Name
-		}
-
-		parts = append(parts, fmt.Sprintf("--- %s ---\n%s", name, file.Content))
+	for _, file := range paste.Files {
+		parts = append(parts, fmt.Sprintf("<File:%s>\n%s", file.Id, file.Content))
 	}
 
 	return strings.Join(parts, "\n\n")
