@@ -2,6 +2,15 @@ services:
   db:
     image: postgres:18
     restart: unless-stopped
+    shm_size: 256mb
+    mem_limit: 1g
+    command: >
+      postgres
+      -c shared_buffers=256MB
+      -c effective_cache_size=768MB
+      -c work_mem=4MB
+      -c maintenance_work_mem=64MB
+      -c max_connections=50
     networks:
       - backend
     environment:
@@ -24,10 +33,15 @@ services:
     restart: unless-stopped
     networks:
       - backend
-    volumes:
-      - valkey_data:/data
-    ports:
-      - "6379:6379"
+    expose:
+      - "6379"
+    mem_limit: 384m
+    command: >
+      valkey-server
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      --save ""
+      --appendonly no
     healthcheck:
       test: ["CMD", "valkey-cli", "ping"]
       interval: 5s
@@ -37,6 +51,7 @@ services:
   app:
     build: .
     restart: unless-stopped
+    mem_limit: 384m
     networks:
       - backend
     depends_on:
@@ -61,4 +76,3 @@ networks:
 
 volumes:
   postgres_data:
-  valkey_data:
