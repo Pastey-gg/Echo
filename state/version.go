@@ -13,6 +13,11 @@ type VersionInfo struct {
 	CommitTime string
 }
 
+var (
+	commitHash = ""
+	commitTime = ""
+)
+
 func getVersion(logger *logger.Logger) string {
 	data, err := os.ReadFile("VERSION")
 	if err != nil {
@@ -25,6 +30,8 @@ func getVersion(logger *logger.Logger) string {
 func NewVersionInfo(logger *logger.Logger) VersionInfo {
 	var verInfo VersionInfo
 	verInfo.Version = getVersion(logger)
+	verInfo.CommitHash = commitHash
+	verInfo.CommitTime = commitTime
 
 	info, ok := debug.ReadBuildInfo()
 	if !ok {
@@ -35,9 +42,13 @@ func NewVersionInfo(logger *logger.Logger) VersionInfo {
 	for _, setting := range info.Settings {
 		switch setting.Key {
 		case "vcs.revision":
-			verInfo.CommitHash = setting.Value
+			if verInfo.CommitHash == "" {
+				verInfo.CommitHash = setting.Value
+			}
 		case "vcs.time":
-			verInfo.CommitTime = setting.Value
+			if verInfo.CommitTime == "" {
+				verInfo.CommitTime = setting.Value
+			}
 		}
 	}
 
