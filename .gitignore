@@ -33,5 +33,8 @@ go.work.sum
 # .idea/
 # .vscode/
 
+# Generated API docs
+docs/
+
 # Configs
 config.yaml

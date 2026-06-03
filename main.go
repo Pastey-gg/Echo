@@ -1,10 +1,9 @@
-//go:generate swag init
+//go:generate go run github.com/swaggo/swag/cmd/swag init
 package main
 
 import (
 	"fmt"
 
-	_ "github.com/EvieePy/Echo/docs"
 	"github.com/EvieePy/Echo/routes"
 	"github.com/EvieePy/Echo/state"
 )
