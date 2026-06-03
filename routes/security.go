@@ -18,6 +18,16 @@ func (v *SecurityView) LoadRoutes() {
 	v.ctx.Server.GET("/security/:token", v.getSecurity)
 }
 
+// getSecurity godoc
+// @Summary Get security information
+// @Description Retrieves paste deletion URL and details using a one-time safety token.
+// @Tags security
+// @Produce application/json
+// @Param token path string true "Safety Token"
+// @Success 200 {object} models.Security
+// @Failure 404 {map} string "{"error": "Token not found or paste has been deleted."}"
+// @Failure 500 {map} string "{"error": "Internal server error."}"
+// @Router /security/{token} [get]
 func (v *SecurityView) getSecurity(c *echo.Context) error {
 	token := c.Param("token")
 

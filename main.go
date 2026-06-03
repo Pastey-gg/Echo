@@ -4,11 +4,16 @@ package main
 import (
 	"fmt"
 
+	_ "github.com/EvieePy/Echo/docs"
 	"github.com/EvieePy/Echo/routes"
 	"github.com/EvieePy/Echo/state"
 )
 
 // @title Pastey.gg API Documentation
+// @version 0.1.0a
+// @description Documentation for the Pastey.gg API
+// @host api.pastey.gg
+// @basePath /
 // @license.name AGPL-3.0-or-later
 // @license.url https://www.gnu.org/licenses/#AGPL
 func main() {

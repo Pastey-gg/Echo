@@ -25,6 +25,18 @@ func (v *PasteView) LoadRoutes() {
 	v.ctx.Server.DELETE("/pastes/:id/files/:file_id", v.deleteFile)
 }
 
+// createPaste godoc
+// @Summary Create a new paste
+// @Description Creates a new paste. You can send a JSON payload matching the CreatePaste model, or send raw text in the body (which defaults to a single file).
+// @Tags pastes
+// @Accept application/json
+// @Accept plain
+// @Produce application/json
+// @Param paste body models.CreatePaste false "Paste Creation Payload (when sending JSON)"
+// @Success 201 {object} models.CreatePasteResponse
+// @Failure 400 {map} string "{"error": "Invalid JSON or validation failed."}"
+// @Failure 500 {map} string "{"error": "Internal server error."}"
+// @Router /pastes [post]
 func (v *PasteView) createPaste(c *echo.Context) error {
 	contentType := c.Request().Header.Get("Content-Type")
 	viaWeb := c.QueryParam("web") == "true"
@@ -82,6 +94,20 @@ func fetchPasteOptions(c *echo.Context) models.FetchPasteOptions {
 	}
 }
 
+// getPaste godoc
+// @Summary Fetch paste by ID
+// @Description Retrieves a paste's metadata and files by its ID. Requires an Authorization header if the paste is password-protected.
+// @Tags pastes
+// @Produce application/json
+// @Param id path string true "Paste ID"
+// @Param Authorization header string false "Password for protected pastes"
+// @Param X-Safety-Token header string false "Safety token to manage the paste or bypass view limits"
+// @Param skip_view query bool false "Set to true to skip incrementing the view count"
+// @Success 200 {object} models.PasteResponse
+// @Failure 401 {map} string "{"error": "Invalid or missing password or safety token."}"
+// @Failure 404 {map} string "{"error": "Paste not found or has expired."}"
+// @Failure 500 {map} string "{"error": "Internal server error."}"
+// @Router /pastes/{id} [get]
 func (v *PasteView) getPaste(c *echo.Context) error {
 	id := c.Param("id")
 	options := fetchPasteOptions(c)
@@ -123,6 +149,20 @@ func rawPasteContent(paste models.PasteResponse) string {
 	return strings.Join(parts, "\n\n")
 }
 
+// getPasteRaw godoc
+// @Summary Fetch raw paste content
+// @Description Retrieves the raw text content of a paste by its ID. If the paste has multiple files, they are concatenated. Requires an Authorization header if password-protected.
+// @Tags pastes
+// @Produce plain
+// @Param id path string true "Paste ID"
+// @Param Authorization header string false "Password for protected pastes"
+// @Param X-Safety-Token header string false "Safety token to manage the paste or bypass view limits"
+// @Param skip_view query bool false "Set to true to skip incrementing the view count"
+// @Success 200 {string} string "Raw paste content"
+// @Failure 401 {map} string "{"error": "Invalid or missing password or safety token."}"
+// @Failure 404 {map} string "{"error": "Paste not found or has expired."}"
+// @Failure 500 {map} string "{"error": "Internal server error."}"
+// @Router /pastes/{id}/raw [get]
 func (v *PasteView) getPasteRaw(c *echo.Context) error {
 	id := c.Param("id")
 	options := fetchPasteOptions(c)
@@ -145,6 +185,21 @@ func (v *PasteView) getPasteRaw(c *echo.Context) error {
 	return c.String(http.StatusOK, rawPasteContent(paste))
 }
 
+// getFile godoc
+// @Summary Fetch specific files from a paste
+// @Description Retrieves a specific file's metadata and content by its ID and its parent paste ID. Requires an Authorization header if the paste is password-protected.
+// @Tags pastes
+// @Produce application/json
+// @Param id path string true "Paste ID"
+// @Param file_id path string true "File ID"
+// @Param Authorization header string false "Password for protected pastes"
+// @Param X-Safety-Token header string false "Safety token to manage the paste or bypass view limits"
+// @Param skip_view query bool false "Set to true to skip incrementing the view count"
+// @Success 200 {object} models.File
+// @Failure 401 {map} string "{"error": "Invalid or missing password or safety token."}"
+// @Failure 404 {map} string "{"error": "Paste or file not found, or paste has expired."}"
+// @Failure 500 {map} string "{"error": "Internal server error."}"
+// @Router /pastes/{id}/files/{file_id} [get]
 func (v *PasteView) getFile(c *echo.Context) error {
 	pasteID := c.Param("id")
 	fileID := c.Param("file_id")
@@ -171,6 +226,18 @@ func safetyTokenHeader(c *echo.Context) (string, bool) {
 	return token, token != ""
 }
 
+// deletePaste godoc
+// @Summary Delete a paste
+// @Description Deletes a paste by its ID. Requires the one-time safety token provided during the paste's creation.
+// @Tags pastes
+// @Produce json
+// @Param id path string true "Paste ID"
+// @Param X-Safety-Token header string true "Safety token required for deletion"
+// @Success 204 "No Content"
+// @Failure 401 {map} string "{"error": "Missing safety token."}"
+// @Failure 404 {map} string "{"error": "Paste not found or safety token is invalid."}"
+// @Failure 500 {map} string "{"error": "Internal server error."}"
+// @Router /pastes/{id} [delete]
 func (v *PasteView) deletePaste(c *echo.Context) error {
 	pasteID := c.Param("id")
 	token, ok := safetyTokenHeader(c)
@@ -190,6 +257,20 @@ func (v *PasteView) deletePaste(c *echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
+// deleteFile godoc
+// @Summary Delete a file from a paste
+// @Description Deletes a specific file from a paste by its ID. Requires the safety token.
+// @Tags pastes
+// @Produce json
+// @Param id path string true "Paste ID"
+// @Param file_id path string true "File ID"
+// @Param X-Safety-Token header string true "Safety token required for deletion"
+// @Success 204 "No Content"
+// @Failure 401 {map} string "{"error": "Missing safety token."}"
+// @Failure 404 {map} string "{"error": "Paste, file, or safety token not found."}"
+// @Failure 409 {map} string "{"error": "Cannot delete the last file in a paste; delete the paste instead."}"
+// @Failure 500 {map} string "{"error": "Internal server error."}"
+// @Router /pastes/{id}/files/{file_id} [delete]
 func (v *PasteView) deleteFile(c *echo.Context) error {
 	pasteID := c.Param("id")
 	fileID := c.Param("file_id")
