@@ -144,8 +144,8 @@ func (m *Memory) authorizeAndCountPaste(id string, sp *storedPaste, options mode
 	}
 
 	if sp.paste.ExpiresAt != nil && time.Now().After(*sp.paste.ExpiresAt) {
-		delete(m.pastes, id)
-		delete(m.tokens, sp.safetyToken)
+		now := time.Now().UTC()
+		sp.paste.DeletedAt = &now
 		return models.ErrNotFound
 	}
 
@@ -165,8 +165,8 @@ func (m *Memory) authorizeAndCountPaste(id string, sp *storedPaste, options mode
 	}
 
 	if !skipView && sp.paste.RemainingViews != nil && *sp.paste.RemainingViews <= 0 {
-		delete(m.pastes, id)
-		delete(m.tokens, sp.safetyToken)
+		now := time.Now().UTC()
+		sp.paste.DeletedAt = &now
 		return models.ErrNotFound
 	}
 

@@ -288,7 +288,7 @@ func (p *Postgres) CreatePaste(cp models.CreatePaste) (models.CreatePasteRespons
 
 func (p *Postgres) authorizeAndCountPaste(ctx context.Context, id string, paste models.Paste, hashedPw *string, safetyToken string, options models.FetchPasteOptions) (int, *int, error) {
 	if paste.ExpiresAt != nil && time.Now().After(*paste.ExpiresAt) {
-		p.pool.Exec(ctx, `DELETE FROM pastes WHERE id = $1`, id)
+		p.pool.Exec(ctx, `UPDATE pastes SET deleted_at = now() WHERE id = $1 AND deleted_at IS NULL`, id)
 		return 0, nil, models.ErrNotFound
 	}
 
@@ -308,7 +308,7 @@ func (p *Postgres) authorizeAndCountPaste(ctx context.Context, id string, paste 
 	}
 
 	if !skipView && paste.RemainingViews != nil && *paste.RemainingViews <= 0 {
-		p.pool.Exec(ctx, `DELETE FROM pastes WHERE id = $1`, id)
+		p.pool.Exec(ctx, `UPDATE pastes SET deleted_at = now() WHERE id = $1 AND deleted_at IS NULL`, id)
 		return 0, nil, models.ErrNotFound
 	}
 
