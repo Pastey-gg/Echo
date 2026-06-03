@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS pastes (
     views           INT          NOT NULL DEFAULT 0,
     expires_at      TIMESTAMPTZ,
     deleted_at      TIMESTAMPTZ,
-    remaining_views INT,
+    remaining_views INT CHECK (remaining_views IS NULL OR (remaining_views >= 1 AND remaining_views <= 1000)),
     hashed_password TEXT,
     safety_token    TEXT  NOT NULL UNIQUE
 );

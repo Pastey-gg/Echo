@@ -306,6 +306,10 @@ func validatePaste(ctx *state.Context, p models.CreatePaste) error {
 		return fmt.Errorf("Maximum of %d files per paste allowed.", maxFiles)
 	}
 
+	if p.RemainingViews != nil && (*p.RemainingViews < 1 || *p.RemainingViews > 1000) {
+		return errors.New("remaining_views must be between 1 and 1000.")
+	}
+
 	for _, f := range p.Files {
 		if f.Content == "" {
 			return errors.New("File content cannot be empty.")
