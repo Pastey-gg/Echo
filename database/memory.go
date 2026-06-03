@@ -54,23 +54,15 @@ func (m *Memory) PurgeDeleted() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	m.purgeDeleted(time.Now().UTC())
 	return nil
 }
 
 func (m *Memory) Ping() error { return nil }
 
 func (m *Memory) CreatePaste(p models.CreatePaste) (models.CreatePasteResponse, error) {
-	id, err := generateID(m.config.Pastes.IdLen)
-	if err != nil {
-		return models.CreatePasteResponse{}, err
-	}
-
-	token, err := generateID(m.config.Pastes.TokenLen)
-	if err != nil {
-		return models.CreatePasteResponse{}, err
-	}
-
 	var hashedPw []byte
+	var err error
 	if p.Password != nil && *p.Password != "" {
 		hashedPw, err = bcrypt.GenerateFromPassword([]byte(*p.Password), bcrypt.DefaultCost)
 		if err != nil {
@@ -93,24 +85,51 @@ func (m *Memory) CreatePaste(p models.CreatePaste) (models.CreatePasteResponse, 
 		}
 	}
 
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	var id string
+	for {
+		id, err = generateID(m.config.Pastes.IdLen)
+		if err != nil {
+			return models.CreatePasteResponse{}, err
+		}
+
+		if _, exists := m.pastes[id]; !exists {
+			break
+		}
+	}
+
+	var token string
+	for {
+		token, err = generateID(m.config.Pastes.TokenLen)
+		if err != nil {
+			return models.CreatePasteResponse{}, err
+		}
+
+		if _, exists := m.tokens[token]; !exists {
+			break
+		}
+	}
+
 	paste := models.Paste{
 		Id:             id,
 		CreatedAt:      time.Now().UTC(),
+		Web:            p.Web,
 		ExpiresAt:      p.ExpiresAt,
 		RemainingViews: p.RemainingViews,
 		Files:          files,
 	}
 
-	m.mu.Lock()
 	m.pastes[id] = &storedPaste{paste: paste, hashedPassword: hashedPw, safetyToken: token}
 	m.tokens[token] = id
-	m.mu.Unlock()
 
 	return models.CreatePasteResponse{
 		SafetyToken: token,
 		PasteResponse: models.PasteResponse{
 			Id:             paste.Id,
 			CreatedAt:      paste.CreatedAt,
+			Web:            paste.Web,
 			ExpiresAt:      paste.ExpiresAt,
 			RemainingViews: paste.RemainingViews,
 			HasPassword:    hashedPw != nil,
@@ -195,6 +214,7 @@ func (m *Memory) FetchPaste(id string, options models.FetchPasteOptions) (models
 	return models.PasteResponse{
 		Id:             sp.paste.Id,
 		CreatedAt:      sp.paste.CreatedAt,
+		Web:            sp.paste.Web,
 		Views:          sp.paste.Views,
 		ExpiresAt:      sp.paste.ExpiresAt,
 		RemainingViews: sp.paste.RemainingViews,
