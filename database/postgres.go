@@ -211,7 +211,7 @@ func (p *Postgres) CreatePaste(cp models.CreatePaste) (models.CreatePasteRespons
 	}
 
 	var id, token string
-	var createdAt time.Time
+	var paste models.Paste
 
 	for {
 		var err error
@@ -239,9 +239,9 @@ func (p *Postgres) CreatePaste(cp models.CreatePaste) (models.CreatePasteRespons
 		err = tx.QueryRow(ctx,
 			`INSERT INTO pastes (id, web, expires_at, remaining_views, hashed_password, safety_token)
 			 VALUES ($1, $2, $3, $4, $5, $6)
-			 RETURNING created_at`,
+			 RETURNING id, web, created_at, views, expires_at, remaining_views`,
 			id, cp.Web, cp.ExpiresAt, cp.RemainingViews, hashedPwStr, token,
-		).Scan(&createdAt)
+		).Scan(&paste.Id, &paste.Web, &paste.CreatedAt, &paste.Views, &paste.ExpiresAt, &paste.RemainingViews)
 
 		if err != nil {
 			tx.Rollback(ctx)
@@ -272,18 +272,7 @@ func (p *Postgres) CreatePaste(cp models.CreatePaste) (models.CreatePasteRespons
 		break
 	}
 
-	return models.CreatePasteResponse{
-		SafetyToken: token,
-		PasteResponse: models.PasteResponse{
-			Id:             id,
-			CreatedAt:      createdAt,
-			ExpiresAt:      cp.ExpiresAt,
-			RemainingViews: cp.RemainingViews,
-			HasPassword:    hashedPw != nil,
-			Files:          files,
-			Web:            cp.Web,
-		},
-	}, nil
+	return createPasteResponse(paste, files, hashedPw != nil, token), nil
 }
 
 func (p *Postgres) authorizeAndCountPaste(ctx context.Context, id string, paste models.Paste, hashedPw *string, safetyToken string, options models.FetchPasteOptions) (int, *int, error) {

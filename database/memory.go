@@ -124,21 +124,10 @@ func (m *Memory) CreatePaste(p models.CreatePaste) (models.CreatePasteResponse, 
 	m.pastes[id] = &storedPaste{paste: paste, hashedPassword: hashedPw, safetyToken: token}
 	m.tokens[token] = id
 
-	return models.CreatePasteResponse{
-		SafetyToken: token,
-		PasteResponse: models.PasteResponse{
-			Id:             paste.Id,
-			CreatedAt:      paste.CreatedAt,
-			Web:            paste.Web,
-			ExpiresAt:      paste.ExpiresAt,
-			RemainingViews: paste.RemainingViews,
-			HasPassword:    hashedPw != nil,
-			Files:          files,
-		},
-	}, nil
+	return createPasteResponse(paste, files, hashedPw != nil, token), nil
 }
 
-func (m *Memory) authorizeAndCountPaste(id string, sp *storedPaste, options models.FetchPasteOptions) error {
+func (m *Memory) authorizeAndCountPaste(sp *storedPaste, options models.FetchPasteOptions) error {
 	if sp.paste.DeletedAt != nil {
 		return models.ErrNotFound
 	}
@@ -200,7 +189,7 @@ func (m *Memory) FetchPaste(id string, options models.FetchPasteOptions) (models
 		return models.PasteResponse{}, models.ErrNotFound
 	}
 
-	if err := m.authorizeAndCountPaste(id, sp, options); err != nil {
+	if err := m.authorizeAndCountPaste(sp, options); err != nil {
 		return models.PasteResponse{}, err
 	}
 
@@ -232,7 +221,7 @@ func (m *Memory) FetchFile(pasteID, fileID string, options models.FetchPasteOpti
 		return models.File{}, models.ErrNotFound
 	}
 
-	if err := m.authorizeAndCountPaste(pasteID, sp, options); err != nil {
+	if err := m.authorizeAndCountPaste(sp, options); err != nil {
 		return models.File{}, err
 	}
 
