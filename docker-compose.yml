@@ -37,6 +37,8 @@ services:
       - backend
     expose:
       - "6379"
+    ports:
+      - "127.0.0.1:16379:6379"
     mem_limit: 384m
     command: >
       valkey-server

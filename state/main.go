@@ -2,6 +2,7 @@ package state
 
 import (
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"time"
@@ -110,11 +111,11 @@ func loadMiddleware(server *echo.Echo, config *models.Config, reqLogger *logger.
 }
 
 func NewContext() *Context {
+	_, dockerNet, _ := net.ParseCIDR("172.16.0.0/12")
 	server := echo.New()
 	server.IPExtractor = echo.ExtractIPFromXFFHeader(
-		echo.TrustLoopback(false),   // e.g. IPv4 starting with 127.
-		echo.TrustLinkLocal(false),  // e.g. IPv4 starting with 169.254.
-		echo.TrustPrivateNet(false), // e.g. IPv4 starting with 10. or 192.168.)
+		echo.TrustIPRange(dockerNet),
+		echo.TrustLoopback(true),
 	)
 
 	appLogger := logger.New("APP", logger.ColourApp)

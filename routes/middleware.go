@@ -22,6 +22,7 @@ func (v *MiddlewareView) LoadRoutes() {
 
 func (v *MiddlewareView) rateLimiter(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c *echo.Context) error {
+		request := c.Request()
 		clientIP := c.RealIP()
 		pathID := c.Param("id")
 
@@ -35,7 +36,6 @@ func (v *MiddlewareView) rateLimiter(next echo.HandlerFunc) echo.HandlerFunc {
 		}
 
 		// Find our limits for this path...
-		request := c.Request()
 		var matched *models.RateLimitT
 
 		for _, limit := range v.ctx.Config.Limits {
