@@ -23,6 +23,7 @@ func (v *MiddlewareView) LoadRoutes() {
 func (v *MiddlewareView) rateLimiter(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c *echo.Context) error {
 		clientIP := c.RealIP()
+		pathID := c.Param("id")
 
 		// Check if we have valkey and if the request is not local...
 		// TODO: ...
@@ -60,7 +61,7 @@ func (v *MiddlewareView) rateLimiter(next echo.HandlerFunc) echo.HandlerFunc {
 		}
 		timestampS := fmt.Sprintf("%s:%d", strconv.FormatInt(nowTs, 10), randInt)
 
-		clientKey := fmt.Sprintf("ratelimit:%s:%s:%s", request.Method, c.Path(), clientIP)
+		clientKey := fmt.Sprintf("ratelimit:%s:%s:%s", request.Method, pathID, clientIP)
 		result := v.ctx.Valkey.Lua.Exec(
 			request.Context(),
 			v.ctx.Valkey.Client,

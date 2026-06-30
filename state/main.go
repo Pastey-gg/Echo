@@ -111,6 +111,11 @@ func loadMiddleware(server *echo.Echo, config *models.Config, reqLogger *logger.
 
 func NewContext() *Context {
 	server := echo.New()
+	server.IPExtractor = echo.ExtractIPFromXFFHeader(
+		echo.TrustLoopback(false),   // e.g. IPv4 starting with 127.
+		echo.TrustLinkLocal(false),  // e.g. IPv4 starting with 169.254.
+		echo.TrustPrivateNet(false), // e.g. IPv4 starting with 10. or 192.168.)
+	)
 
 	appLogger := logger.New("APP", logger.ColourApp)
 	reqLogger := logger.New("REQUEST", logger.ColourRequest)
