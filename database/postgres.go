@@ -37,7 +37,7 @@ func NewPostgres(config *models.Config) (*Postgres, error) {
 		return nil, err
 	}
 
-	if _, err := pool.Exec(ctx, schema); err != nil {
+	if err := execSQLBatch(ctx, pool, schema); err != nil {
 		pool.Close()
 		return nil, err
 	}
@@ -161,7 +161,17 @@ func applyInitSQL(ctx context.Context, pool *pgxpool.Pool) error {
 		return nil
 	}
 
-	_, err := pool.Exec(ctx, initSQL)
+	return execSQLBatch(ctx, pool, initSQL)
+}
+
+func execSQLBatch(ctx context.Context, pool *pgxpool.Pool, sql string) error {
+	conn, err := pool.Acquire(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Release()
+
+	_, err = conn.Conn().PgConn().Exec(ctx, sql).ReadAll()
 	return err
 }
 
@@ -176,11 +186,11 @@ func (p *Postgres) PurgeDeleted() error {
 func (p *Postgres) purgeDeleted(ctx context.Context) error {
 	cutoff := softDeleteCutoff(time.Now().UTC())
 
-	_, err := p.pool.Exec(ctx,
-		`DELETE FROM files WHERE deleted_at < $1;
-		 DELETE FROM pastes WHERE deleted_at < $1`,
-		cutoff,
-	)
+	if _, err := p.pool.Exec(ctx, `DELETE FROM files WHERE deleted_at < $1`, cutoff); err != nil {
+		return err
+	}
+
+	_, err := p.pool.Exec(ctx, `DELETE FROM pastes WHERE deleted_at < $1`, cutoff)
 	return err
 }
 
