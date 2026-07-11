@@ -31,7 +31,7 @@ func NewMemory(config *models.Config) *Memory {
 }
 
 func (m *Memory) purgeDeleted(now time.Time) {
-	cutoff := now.Add(-softDeleteRetention)
+	cutoff := softDeleteCutoff(now)
 
 	for id, sp := range m.pastes {
 		if sp.paste.DeletedAt != nil && sp.paste.DeletedAt.Before(cutoff) {

@@ -174,9 +174,12 @@ func (p *Postgres) PurgeDeleted() error {
 }
 
 func (p *Postgres) purgeDeleted(ctx context.Context) error {
+	cutoff := softDeleteCutoff(time.Now().UTC())
+
 	_, err := p.pool.Exec(ctx,
-		`DELETE FROM files WHERE deleted_at < now() - interval '24 hours';
-		 DELETE FROM pastes WHERE deleted_at < now() - interval '24 hours'`,
+		`DELETE FROM files WHERE deleted_at < $1;
+		 DELETE FROM pastes WHERE deleted_at < $1`,
+		cutoff,
 	)
 	return err
 }

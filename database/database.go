@@ -9,9 +9,13 @@ import (
 )
 
 const (
-	idChars             = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	softDeleteRetention = 24 * time.Hour
+	idChars                   = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	softDeleteRetentionMonths = 6
 )
+
+func softDeleteCutoff(now time.Time) time.Time {
+	return now.AddDate(0, -softDeleteRetentionMonths, 0)
+}
 
 type Database interface {
 	CreatePaste(p models.CreatePaste) (models.CreatePasteResponse, error)
