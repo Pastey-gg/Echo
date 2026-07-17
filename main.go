@@ -1,4 +1,5 @@
-//go:generate go run github.com/swaggo/swag/cmd/swag init
+//go:generate go tool swag init --outputTypes json
+//go:generate go run ./cmd/openapi-convert
 package main
 
 import (
@@ -13,6 +14,7 @@ import (
 // @description Documentation for the Pastey.gg API
 // @host api.pastey.gg
 // @basePath /
+// @schemes https
 // @license.name AGPL-3.0-or-later
 // @license.url https://www.gnu.org/licenses/#AGPL
 func main() {

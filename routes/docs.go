@@ -1,9 +1,7 @@
 package routes
 
 import (
-	"encoding/json"
 	"net/http"
-	"os"
 
 	"github.com/EvieePy/Echo/state"
 	"github.com/labstack/echo/v5"
@@ -20,38 +18,17 @@ func (v *DocsView) LoadRoutes() {
 }
 
 func (v *DocsView) schemaJSON(c *echo.Context) error {
-	fileBytes, err := os.ReadFile("docs/swagger.json")
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to read swagger.json"})
+	if err := c.File("docs/swagger.json"); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to serve swagger.json"})
 	}
-
-	var data map[string]interface{}
-	if err := json.Unmarshal(fileBytes, &data); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to parse swagger JSON"})
-	}
-
-	// Compat for Swagger 2 to 3
-	if definitions, exists := data["definitions"]; exists {
-		components := map[string]any{
-			"schemas": definitions,
-		}
-		data["components"] = components
-		delete(data, "definitions")
-	}
-
-	data["openapi"] = "3.0.0"
-	delete(data, "swagger")
-
-	patchedBytes, err := json.Marshal(data)
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to serialize updated schema"})
-	}
-
-	return c.Blob(http.StatusOK, echo.MIMEApplicationJSON, patchedBytes)
+	return nil
 }
 
 func (v *DocsView) schemaYAML(c *echo.Context) error {
-	return c.File("docs/swagger.yaml")
+	if err := c.File("docs/swagger.yaml"); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to serve swagger.yaml"})
+	}
+	return nil
 }
 
 func (v *DocsView) docs(c *echo.Context) error {

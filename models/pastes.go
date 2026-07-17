@@ -17,7 +17,7 @@ type CreatePaste struct {
 	RemainingViews *int         `json:"remaining_views"`
 	Password       *string      `json:"password"`
 	Files          []CreateFile `json:"files"`
-	Web            bool         `json:"web"`
+	Web            bool         `json:"-" swaggerignore:"true"`
 }
 
 // Paste is the internal DB representation. Password is never serialised.
@@ -51,10 +51,17 @@ type PasteResponse struct {
 	Files          []File     `json:"files"`
 }
 
-// CreatePasteResponse is returned by POST /pastes — includes the one-time safety token.
+// CreatePasteResponse is returned by POST /pastes and includes the one-time safety token.
 type CreatePasteResponse struct {
-	SafetyToken string `json:"safety_token"`
-	PasteResponse
+	Id             string     `json:"id"`
+	CreatedAt      time.Time  `json:"created_at"`
+	Web            bool       `json:"web" example:"false"`
+	Views          int        `json:"views"`
+	ExpiresAt      *time.Time `json:"expires_at"`
+	RemainingViews *int       `json:"remaining_views"`
+	HasPassword    bool       `json:"has_password"`
+	Files          []File     `json:"files"`
+	SafetyToken    string     `json:"safety_token"`
 }
 
 // Security is returned by GET /security/:token.
