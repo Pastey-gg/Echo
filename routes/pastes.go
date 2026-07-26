@@ -71,6 +71,13 @@ func (v *PasteView) createPaste(c *echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Internal server error."})
 	}
 
+	if v.ctx.RMQ != nil {
+		err = v.ctx.RMQ.PublishPaste(paste.Id)
+		if err != nil {
+			v.ctx.Logger.Errorf("Failed to send paste to Security-Scanner RMQ: %v", err)
+		}
+	}
+
 	return c.JSON(http.StatusCreated, paste)
 }
 

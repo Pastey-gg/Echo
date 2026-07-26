@@ -10,6 +10,7 @@ import (
 	"github.com/EvieePy/Echo/database"
 	"github.com/EvieePy/Echo/logger"
 	"github.com/EvieePy/Echo/models"
+	"github.com/EvieePy/Echo/queue"
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
 	"gopkg.in/yaml.v3"
@@ -25,6 +26,7 @@ type Context struct {
 	Database      database.Database
 	VersionInfo   *VersionInfo
 	Valkey        *database.Valkey
+	RMQ           *queue.RMQ
 }
 
 func loadConfig(appLogger *logger.Logger) models.Config {
@@ -71,6 +73,21 @@ func loadValkey(config *models.Config, appLogger *logger.Logger) *database.Valke
 	}
 	appLogger.Info("Successfully connected to Valkey.")
 	return valk
+}
+
+func loadRMQ(config *models.Config, appLogger *logger.Logger) *queue.RMQ {
+	if config.MessageQueue.DSN == "" {
+		appLogger.Warn("No RMQ configuration was found. Security Scanning will be disabled.")
+		return nil
+	}
+
+	rabbi, err := queue.NewRMQ(config)
+	if err != nil {
+		panic(err)
+	}
+
+	appLogger.Info("Successfully connected to RMQ.")
+	return rabbi
 }
 
 func startPurgeLoop(db database.Database, appLogger *logger.Logger) {
@@ -128,6 +145,7 @@ func NewContext() *Context {
 	loadMiddleware(server, &config, reqLogger)
 	verInfo := NewVersionInfo(appLogger)
 	valk := loadValkey(&config, appLogger)
+	rabbi := loadRMQ(&config, appLogger)
 
 	return &Context{
 		Server:        server,
@@ -137,5 +155,6 @@ func NewContext() *Context {
 		Database:      db,
 		VersionInfo:   &verInfo,
 		Valkey:        valk,
+		RMQ:           rabbi,
 	}
 }
