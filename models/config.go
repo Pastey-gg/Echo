@@ -30,5 +30,10 @@ type Config struct {
 		TokenLen    int `yaml:"token_length"`
 	} `yaml:"pastes"`
 
+	MessageQueue struct {
+		DSN  string `yaml:"dsn"`
+		Name string `yaml:"name"`
+	} `yaml:"message_queue"`
+
 	Limits []RateLimitT `yaml:"ratelimits"`
 }

@@ -25,6 +25,10 @@ database:
   # In Memory mode (No DB and loses all pastes on restart)
   # dsn: ""
 
+message_queue:
+  dsn: ""
+  name: ""
+
 pastes:
   max_files: 5
   max_file_size: 350000
