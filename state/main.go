@@ -106,15 +106,16 @@ func startPurgeLoop(db database.Database, appLogger *logger.Logger) {
 
 func loadMiddleware(server *echo.Echo, config *models.Config, reqLogger *logger.Logger) {
 	server.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
-		LogStatus:  true,
-		LogMethod:  true,
-		LogURI:     true,
-		LogLatency: true,
+		LogStatus:   true,
+		LogMethod:   true,
+		LogURI:      true,
+		LogLatency:  true,
+		LogRemoteIP: true,
 		LogValuesFunc: func(c *echo.Context, v middleware.RequestLoggerValues) error {
 			if v.Error != nil {
-				reqLogger.Errorf("%-7s %s → %d (%v) error=%v", v.Method, v.URI, v.Status, v.Latency, v.Error)
+				reqLogger.Errorf("%-7s %s → %d (%v) error=%v ip=%s", v.Method, v.URI, v.Status, v.Latency, v.Error, v.RemoteIP)
 			} else {
-				reqLogger.Infof("%-7s %s → %d (%v)", v.Method, v.URI, v.Status, v.Latency)
+				reqLogger.Infof("%-7s %s → %d (%v) ip=%s", v.Method, v.URI, v.Status, v.Latency, v.RemoteIP)
 			}
 			return nil
 		},

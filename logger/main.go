@@ -43,7 +43,7 @@ func New(module, colour string) *Logger {
 }
 
 func (l *Logger) prefix(level, levelColour string) string {
-	ts := time.Now().Format("2006-01-02 15:04:05")
+	ts := time.Now().UTC().Format(time.RFC3339)
 	mod := fmt.Sprintf("%s%s[%s]%s", bold, l.colour, l.module, reset)
 	lvl := fmt.Sprintf("%s%s[%s]%s", bold, levelColour, level, reset)
 	return ts + " " + mod + " " + lvl
