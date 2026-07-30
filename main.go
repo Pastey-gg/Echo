@@ -20,8 +20,10 @@ import (
 // @license.url https://www.gnu.org/licenses/#AGPL
 func main() {
 	ctx := state.NewContext()
-	defer ctx.RMQ.Env.CloseConnections(context.Background())
-	defer ctx.RMQ.Publisher.Close(context.Background())
+	if ctx.RMQ != nil {
+		defer ctx.RMQ.Env.CloseConnections(context.Background())
+		defer ctx.RMQ.Publisher.Close(context.Background())
+	}
 
 	// Load Routes...
 	routes.LoadRoutes(ctx)
