@@ -179,6 +179,24 @@ func (p *Postgres) Ping() error {
 	return p.pool.Ping(context.Background())
 }
 
+func (p *Postgres) WriteAPIRequestLog(log models.APIRequestLog) error {
+	_, err := p.pool.Exec(context.Background(),
+		`INSERT INTO api_request_logs
+			(requested_at, paste_id, client_ip, method, route, status_code, latency_us, response_bytes, user_agent)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+		log.RequestedAt,
+		log.PasteID,
+		log.ClientIP,
+		log.Method,
+		log.Route,
+		log.StatusCode,
+		log.LatencyUS,
+		log.ResponseBytes,
+		log.UserAgent,
+	)
+	return err
+}
+
 func (p *Postgres) PurgeDeleted() error {
 	return p.purgeDeleted(context.Background())
 }

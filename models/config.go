@@ -20,7 +20,8 @@ type Config struct {
 	} `yaml:"cache"`
 
 	Database struct {
-		DSN string `yaml:"dsn"`
+		DSN            string `yaml:"dsn"`
+		LogAPIRequests bool   `yaml:"log_api_requests"`
 	} `yaml:"database"`
 
 	Pastes struct {

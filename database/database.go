@@ -18,6 +18,7 @@ func softDeleteCutoff(now time.Time) time.Time {
 }
 
 type Database interface {
+	WriteAPIRequestLog(log models.APIRequestLog) error
 	CreatePaste(p models.CreatePaste) (models.CreatePasteResponse, error)
 	FetchPaste(id string, options models.FetchPasteOptions) (models.PasteResponse, error)
 	FetchFile(pasteID, fileID string, options models.FetchPasteOptions) (models.File, error)
