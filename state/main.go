@@ -18,6 +18,12 @@ import (
 
 const purgeDeletedInterval = 12 * time.Hour
 
+const apiRequestLogPasteIDKey = "api_request_log_paste_id"
+
+func SetAPIRequestLogPasteID(c *echo.Context, pasteID string) {
+	c.Set(apiRequestLogPasteIDKey, pasteID)
+}
+
 type Context struct {
 	Server        *echo.Echo
 	Config        *models.Config
@@ -104,18 +110,64 @@ func startPurgeLoop(db database.Database, appLogger *logger.Logger) {
 	}()
 }
 
-func loadMiddleware(server *echo.Echo, config *models.Config, reqLogger *logger.Logger) {
+func loadMiddleware(server *echo.Echo, config *models.Config, db database.Database, reqLogger *logger.Logger) {
 	server.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
-		LogStatus:   true,
-		LogMethod:   true,
-		LogURI:      true,
-		LogLatency:  true,
-		LogRemoteIP: true,
+		HandleError:     true,
+		LogStatus:       true,
+		LogMethod:       true,
+		LogURI:          true,
+		LogURIPath:      true,
+		LogRoutePath:    true,
+		LogLatency:      true,
+		LogRemoteIP:     true,
+		LogUserAgent:    true,
+		LogResponseSize: true,
 		LogValuesFunc: func(c *echo.Context, v middleware.RequestLoggerValues) error {
 			if v.Error != nil {
 				reqLogger.Errorf("%-7s %s → %d (%v) error=%v ip=%s", v.Method, v.URI, v.Status, v.Latency, v.Error, v.RemoteIP)
 			} else {
 				reqLogger.Infof("%-7s %s → %d (%v) ip=%s", v.Method, v.URI, v.Status, v.Latency, v.RemoteIP)
+			}
+			if !config.Database.LogAPIRequests {
+				return nil
+			}
+
+			route := v.RoutePath
+			if route == "" {
+				route = v.URIPath
+			}
+
+			var pasteID *string
+			id := c.Param("id")
+			if id == "" {
+				id, _ = c.Get(apiRequestLogPasteIDKey).(string)
+			}
+			if id != "" {
+				pasteID = &id
+			}
+
+			var userAgent *string
+			if v.UserAgent != "" {
+				userAgent = &v.UserAgent
+			}
+
+			responseBytes := v.ResponseSize
+			if responseBytes < 0 {
+				responseBytes = 0
+			}
+
+			if err := db.WriteAPIRequestLog(models.APIRequestLog{
+				RequestedAt:   v.StartTime.UTC(),
+				PasteID:       pasteID,
+				ClientIP:      v.RemoteIP,
+				Method:        v.Method,
+				Route:         route,
+				StatusCode:    v.Status,
+				LatencyUS:     v.Latency.Microseconds(),
+				ResponseBytes: responseBytes,
+				UserAgent:     userAgent,
+			}); err != nil {
+				reqLogger.Errorf("Failed to persist API request log: %v", err)
 			}
 			return nil
 		},
@@ -143,7 +195,7 @@ func NewContext() *Context {
 	config := loadConfig(appLogger)
 	db := loadDatabase(&config, appLogger)
 	startPurgeLoop(db, appLogger)
-	loadMiddleware(server, &config, reqLogger)
+	loadMiddleware(server, &config, db, reqLogger)
 	verInfo := NewVersionInfo(appLogger)
 	valk := loadValkey(&config, appLogger)
 	rabbi := loadRMQ(&config, appLogger)

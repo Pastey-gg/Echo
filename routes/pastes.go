@@ -70,6 +70,7 @@ func (v *PasteView) createPaste(c *echo.Context) error {
 		v.ctx.Logger.Errorf("Failed to create paste: %v", err)
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Internal server error."})
 	}
+	state.SetAPIRequestLogPasteID(c, paste.Id)
 
 	if v.ctx.RMQ != nil {
 		err = v.ctx.RMQ.PublishPaste(paste.Id)

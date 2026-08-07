@@ -60,6 +60,8 @@ func (m *Memory) PurgeDeleted() error {
 
 func (m *Memory) Ping() error { return nil }
 
+func (m *Memory) WriteAPIRequestLog(models.APIRequestLog) error { return nil }
+
 func (m *Memory) CreatePaste(p models.CreatePaste) (models.CreatePasteResponse, error) {
 	var hashedPw []byte
 	var err error
