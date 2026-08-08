@@ -17,6 +17,15 @@ cache:
 database:
   log_api_requests: true
 
+  # Registered routes excluded from the API request log table. An omitted
+  # method matches every method registered for that route. A trailing /*
+  # matches the route itself and every route below it.
+  log_api_requests_exclude:
+    - route: "/docs/*"
+      method: "GET"
+    - route: "/version/info"
+      method: "GET"
+
   # Docker (make up): use "db" as the host - it resolves inside the Docker network.
   dsn: "postgres://echo:echo@db:5432/echo?sslmode=disable"
   

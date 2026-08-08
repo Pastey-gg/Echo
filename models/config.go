@@ -7,6 +7,11 @@ type RateLimitT struct {
 	Per    int    `yaml:"per"`
 }
 
+type APIRequestLogExclude struct {
+	Route  string `yaml:"route"`
+	Method string `yaml:"method"`
+}
+
 type Config struct {
 	General struct {
 		Host           string   `yaml:"host"`
@@ -20,8 +25,9 @@ type Config struct {
 	} `yaml:"cache"`
 
 	Database struct {
-		DSN            string `yaml:"dsn"`
-		LogAPIRequests bool   `yaml:"log_api_requests"`
+		DSN                   string                 `yaml:"dsn"`
+		LogAPIRequests        bool                   `yaml:"log_api_requests"`
+		LogAPIRequestsExclude []APIRequestLogExclude `yaml:"log_api_requests_exclude"`
 	} `yaml:"database"`
 
 	Pastes struct {
