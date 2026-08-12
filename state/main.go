@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/EvieePy/Echo/database"
@@ -110,6 +111,29 @@ func startPurgeLoop(db database.Database, appLogger *logger.Logger) {
 	}()
 }
 
+func shouldLogAPIRequest(config *models.Config, method, route string) bool {
+	if !config.Database.LogAPIRequests || route == "" {
+		return false
+	}
+
+	for _, excluded := range config.Database.LogAPIRequestsExclude {
+		if matchesAPIRequestLogRoute(excluded.Route, route) && (excluded.Method == "" || strings.EqualFold(excluded.Method, method)) {
+			return false
+		}
+	}
+
+	return true
+}
+
+func matchesAPIRequestLogRoute(pattern, route string) bool {
+	if pattern == route {
+		return true
+	}
+
+	prefix, wildcard := strings.CutSuffix(pattern, "/*")
+	return wildcard && (route == prefix || strings.HasPrefix(route, prefix+"/"))
+}
+
 func loadMiddleware(server *echo.Echo, config *models.Config, db database.Database, reqLogger *logger.Logger) {
 	server.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
 		HandleError:     true,
@@ -128,14 +152,13 @@ func loadMiddleware(server *echo.Echo, config *models.Config, db database.Databa
 			} else {
 				reqLogger.Infof("%-7s %s → %d (%v) ip=%s", v.Method, v.URI, v.Status, v.Latency, v.RemoteIP)
 			}
-			if !config.Database.LogAPIRequests {
+			// RoutePath is empty when Echo did not match a registered route.
+			// These will not be logged in the database.
+			if !shouldLogAPIRequest(config, v.Method, v.RoutePath) {
 				return nil
 			}
 
 			route := v.RoutePath
-			if route == "" {
-				route = v.URIPath
-			}
 
 			var pasteID *string
 			id := c.Param("id")
